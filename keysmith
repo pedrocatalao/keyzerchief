@@ -51,7 +51,7 @@ def prompt_import_pkcs12_form(stdscr):
     labels = ["Key pair file:", "Decryption password:"]
     values = ["", ""]
     field_count = len(labels)
-    current = 0
+    current = -2  # -2 is for encrypted selection
 
     selected_button = 0
 
@@ -144,6 +144,127 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pa
     stdscr.addstr(6, 2, "Press any key to continue.")
     stdscr.refresh()
     stdscr.getch()
+
+def prompt_import_pkcs8_form(stdscr):
+    curses.echo()
+    height, width = stdscr.getmaxyx()
+    win_width = 70
+    win_height = 15
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
+    win.box()
+    win.addstr(1, 2, "Import PKCS #8 Key Pair")
+
+    encrypted = True
+    labels = ["Certificates file:", "PKCS#8 key file:", "Decryption password:"]
+    values = ["", "", ""]
+    current = -2  # -2 for encrypted toggle
+    selected_button = 0
+    in_buttons = False
+
+    while True:
+        win.addstr(3, 2, "Encrypted Private Key:")
+        yes_attr = curses.color_pair(COLOR_PAIR_SELECTED) if encrypted else curses.A_NORMAL
+        no_attr = curses.color_pair(COLOR_PAIR_SELECTED) if not encrypted else curses.A_NORMAL
+        if current == -2:
+            yes_attr |= curses.A_BOLD
+            no_attr |= curses.A_BOLD
+        win.addstr(3, 26, " Yes ", yes_attr)
+        win.addstr(3, 33, " No ", no_attr)
+
+        field_index = 0
+        for i, label in enumerate(labels):
+            y_pos = 5 + i
+            if not encrypted:
+                values[2] = ""
+                if i == 2:
+                    win.addstr(y_pos, 2, " " * 20)
+                else:
+                    win.addstr(y_pos, 2, label)
+                    win.addstr(y_pos, 26, ''.ljust(40), curses.A_DIM)
+            else:
+                win.addstr(y_pos, 2, label)
+
+            field_index = i if encrypted else i - 1
+            is_selected = (not in_buttons and current == field_index)
+            attr = curses.A_REVERSE if is_selected else curses.A_NORMAL
+
+            if i == 2:
+                display_value = '*' * len(values[i])
+            else:
+                display_value = values[i]
+
+            win.addstr(y_pos, 26, display_value[-30:].ljust(40), attr)
+
+        win.addstr(12, 2, " " * (win_width - 4))
+        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
+        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
+
+        win.addstr(12, 2, "[", curses.A_BOLD)
+        win.addstr(" Import ", import_attr | curses.A_BOLD)
+        win.addstr("]   [", curses.A_BOLD)
+        win.addstr(" Cancel ", cancel_attr | curses.A_BOLD)
+        win.addstr("]", curses.A_BOLD)
+
+        if not in_buttons:
+            if current >= 0:
+                y_cursor = 5 + current if encrypted else 4 + current
+                x_cursor = 26 + len(values[current])
+                win.move(y_cursor, x_cursor)
+
+        win.refresh()
+        key = win.getch()
+
+        if current == -2:
+            if key in [10, 13]:
+                encrypted = not encrypted
+            elif key == curses.KEY_LEFT:
+                encrypted = True
+            elif key == curses.KEY_RIGHT:
+                encrypted = False
+            elif key == curses.KEY_DOWN:
+                current = 0
+        elif not in_buttons:
+            field_count = 3 if encrypted else 2
+            if key == curses.KEY_UP:
+                if current > 0:
+                    current -= 1
+                else:
+                    current = -2
+            elif key == curses.KEY_DOWN:
+                if current < field_count - 1:
+                    current += 1
+                else:
+                    in_buttons = True
+                    selected_button = 0
+            elif key in [curses.KEY_BACKSPACE, 127, 8]:
+                if values[current]:
+                    values[current] = values[current][:-1]
+            elif 32 <= key <= 126:
+                if len(values[current]) < 60:
+                    values[current] += chr(key)
+        else:
+            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+                selected_button = 1 - selected_button
+            elif key in [10, 13]:
+                if selected_button == 0:
+                    curses.noecho()
+                    return {
+                        "encrypted": encrypted,
+                        "key_file": values[0].strip(),
+                        "cert_file": values[1].strip(),
+                        "password": values[2].strip(),
+                    }
+                else:
+                    return None
+            elif key == curses.KEY_UP:
+                in_buttons = False
+
+        if key == 27:
+            return None
 
 def prompt_import_key_type(stdscr):
     height, width = stdscr.getmaxyx()
@@ -442,12 +563,16 @@ def main(stdscr):
                 if form_data:
                     import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
                     entries = get_keystore_entries(KEYSTORE_PATH, password)
-            elif choice:
-                stdscr.clear()
-                stdscr.addstr(0, 2, f"Selected type: {choice}")
-                stdscr.addstr(1, 2, "[Import form not implemented yet - press any key]")
-                stdscr.refresh()
-                stdscr.getch()
+            elif choice == "PKCS #8":
+                form_data = prompt_import_pkcs8_form(stdscr)
+                if form_data:
+                    stdscr.clear()
+                    stdscr.addstr(0, 2, f"Would import key from {form_data['key_file']}")
+                    stdscr.addstr(1, 2, f"And cert from {form_data['cert_file']}")
+                    stdscr.addstr(2, 2, "[Import logic not yet implemented]")
+                    stdscr.refresh()
+                    stdscr.getch()
+
         elif key == curses.KEY_F7:
             confirm_height, confirm_width = 7, 50
             confirm_y = (curses.LINES - confirm_height) // 2
