@@ -398,6 +398,41 @@ def main(stdscr):
                 detail_scroll += 1
         elif key == ord('\t') or key == 9:
             active_panel = 1 if active_panel == 0 else 0
+        elif key == curses.KEY_F8:
+            alias = entries[selected].get("Alias name")
+            confirm_height, confirm_width = 7, 50
+            confirm_y = (curses.LINES - confirm_height) // 2
+            confirm_x = (curses.COLS - confirm_width) // 2
+            confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
+            confirm_win.keypad(True)
+            confirm_win.box()
+            confirm_win.addstr(1, 2, f"Delete entry '{alias}'?")
+            options = ["Yes", "No"]
+            selected_option = 1
+            while True:
+                for i, label in enumerate(options):
+                    attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
+                    confirm_win.addstr(5, 2 + i * 10, f" {label} ", attr)
+                confirm_win.refresh()
+                ch = confirm_win.getch()
+                if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+                    selected_option = 1 - selected_option
+                elif ch in [10, 13]:
+                    break
+
+            if selected_option == 0:
+                delete_cmd = ["keytool", "-delete", "-alias", alias, "-keystore", KEYSTORE_PATH, "-storepass", password]
+                result = subprocess.run(delete_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if result.returncode == 0:
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = min(selected, len(entries) - 1)
+                else:
+                    stdscr.clear()
+                    stdscr.addstr(0, 2, "Deletion failed:", curses.A_BOLD)
+                    stdscr.addstr(2, 2, result.stderr.strip())
+                    stdscr.refresh()
+                    stdscr.getch()
+
         elif key in [ord('q'), ord('Q'), 27, curses.KEY_F10]:
             break
         elif key == curses.KEY_F4:
