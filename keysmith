@@ -51,7 +51,7 @@ def prompt_import_pkcs12_form(stdscr):
     labels = ["Key pair file:", "Decryption password:"]
     values = ["", ""]
     field_count = len(labels)
-    current = -2  # -2 is for encrypted selection
+    current = 0
 
     selected_button = 0
 
@@ -145,6 +145,45 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pa
     stdscr.refresh()
     stdscr.getch()
 
+def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
+    alias = os.path.splitext(os.path.basename(form_data['key_file']))[0]
+
+    pkcs8_cmd = [
+        "openssl", "pkcs8",
+        "-topk8",
+        "-inform", "PEM",
+        "-outform", "PEM",
+        "-in", form_data['key_file'],
+        "-passin", f"pass:{form_data['password']}" if form_data['encrypted'] else "pass:",
+        "-out", "/tmp/converted_pkcs8.key"
+    ]
+
+    cmd = [
+        "keytool", "-importcert",
+        "-keystore", keystore_path,
+        "-storepass", keystore_pass,
+        "-alias", alias,
+        "-file", form_data['cert_file'],
+        "-keypass", form_data['password'] if form_data['encrypted'] else keystore_pass
+    ]
+
+    # Run OpenSSL to convert key
+    openssl_result = subprocess.run(pkcs8_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    stdscr.clear()
+    if openssl_result.returncode != 0:
+        stdscr.addstr(0, 2, "OpenSSL conversion failed:", curses.A_BOLD)
+        stdscr.addstr(2, 2, openssl_result.stderr.strip())
+    else:
+        keytool_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if keytool_result.returncode == 0:
+            stdscr.addstr(0, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+        else:
+            stdscr.addstr(0, 2, "Import failed:", curses.A_BOLD)
+            stdscr.addstr(2, 2, keytool_result.stderr.strip())
+    stdscr.addstr(4, 2, "Press any key to continue.")
+    stdscr.refresh()
+    stdscr.getch()
+
 def prompt_import_pkcs8_form(stdscr):
     curses.echo()
     height, width = stdscr.getmaxyx()
@@ -161,7 +200,7 @@ def prompt_import_pkcs8_form(stdscr):
     encrypted = True
     labels = ["Certificates file:", "PKCS#8 key file:", "Decryption password:"]
     values = ["", "", ""]
-    current = -2  # -2 for encrypted toggle
+    current = 0
     selected_button = 0
     in_buttons = False
 
@@ -178,18 +217,14 @@ def prompt_import_pkcs8_form(stdscr):
         field_index = 0
         for i, label in enumerate(labels):
             y_pos = 5 + i
-            if not encrypted:
-                values[2] = ""
-                if i == 2:
-                    win.move(y_pos, 2)
-                    win.clrtoeol()
-                else:
-                    win.addstr(y_pos, 2, label)
-                    win.addstr(y_pos, 26, ''.ljust(40), curses.A_DIM)
+            if not encrypted and i == 2:
+                win.move(y_pos, 2)
+                win.clrtoeol()
+                continue
             else:
                 win.addstr(y_pos, 2, label)
 
-            field_index = i if encrypted else i - 1
+            field_index = i
             is_selected = (not in_buttons and current == field_index)
             attr = curses.A_REVERSE if is_selected else curses.A_NORMAL
 
@@ -212,7 +247,7 @@ def prompt_import_pkcs8_form(stdscr):
 
         if not in_buttons:
             if current >= 0:
-                y_cursor = 5 + current if encrypted else 4 + current
+                y_cursor = 5 + current
                 x_cursor = 26 + len(values[current])
                 win.move(y_cursor, x_cursor)
 
@@ -557,6 +592,7 @@ def main(stdscr):
 
         elif key in [ord('q'), ord('Q'), 27, curses.KEY_F10]:
             break
+
         elif key == curses.KEY_F4:
             choice = prompt_import_key_type(stdscr)
             if choice == "PKCS #12":
@@ -567,12 +603,8 @@ def main(stdscr):
             elif choice == "PKCS #8":
                 form_data = prompt_import_pkcs8_form(stdscr)
                 if form_data:
-                    stdscr.clear()
-                    stdscr.addstr(0, 2, f"Would import key from {form_data['key_file']}")
-                    stdscr.addstr(1, 2, f"And cert from {form_data['cert_file']}")
-                    stdscr.addstr(2, 2, "[Import logic not yet implemented]")
-                    stdscr.refresh()
-                    stdscr.getch()
+                    import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
 
         elif key == curses.KEY_F7:
             confirm_height, confirm_width = 7, 50
