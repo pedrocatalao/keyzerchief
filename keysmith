@@ -4,12 +4,21 @@ import curses
 import subprocess
 import shutil
 import tempfile
+import sys
+import os
 
-# Hardcoded config
-ORIGINAL_KEYSTORE_PATH = "mykeystore.jks"
+# Config from argument
+if len(sys.argv) < 2:
+    print("Usage: keystoreterm <keystore-file>")
+    sys.exit(1)
+
+ORIGINAL_KEYSTORE_PATH = sys.argv[1]
+if not os.path.isfile(ORIGINAL_KEYSTORE_PATH):
+    print(f"File not found: {ORIGINAL_KEYSTORE_PATH}")
+    sys.exit(1)
+
 KEYSTORE_COPY_PATH = tempfile.NamedTemporaryFile(delete=False, suffix=".jks").name
 shutil.copyfile(ORIGINAL_KEYSTORE_PATH, KEYSTORE_COPY_PATH)
-
 KEYSTORE_PATH = KEYSTORE_COPY_PATH
 
 # Colors
@@ -161,6 +170,19 @@ def prompt_import_key_type(stdscr):
         elif key in [27]:
             return None
 
+def keystore_has_password(keystore_path):
+    try:
+        # Try listing the keystore using an empty password
+        subprocess.run(
+            ["keytool", "-list", "-keystore", keystore_path, "-storepass", ""],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        return False
+    except subprocess.CalledProcessError:
+        return True
+
 def prompt_password(stdscr):
     while True:
         stdscr.clear()
@@ -195,9 +217,34 @@ def prompt_password(stdscr):
             return password
         except Exception as e:
             stdscr.addstr(height // 2 + 2, (width - len(str(e))) // 2, str(e), curses.A_BOLD | curses.color_pair(COLOR_PAIR_HEADER))
-            stdscr.addstr(height // 2 + 3, (width - 24) // 2, "Press any key to try again")
-            stdscr.refresh()
-            stdscr.getch()
+
+            # Retry confirmation popup
+            confirm_height, confirm_width = 5, 40
+            confirm_y = (height - confirm_height) // 2
+            confirm_x = (width - confirm_width) // 2
+            confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
+            confirm_win.keypad(True)
+            confirm_win.box()
+            confirm_win.addstr(1, 2, "Password incorrect. Retry?")
+
+            selected_option = 0
+            options = ["Yes", "No"]
+
+            while True:
+                for i, label in enumerate(options):
+                    attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
+                    confirm_win.addstr(3, 2 + i * 10, f" {label} ", attr)
+                confirm_win.refresh()
+                k = confirm_win.getch()
+                if k in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+                    selected_option = 1 - selected_option
+                elif k in [10, 13]:
+                    break
+
+            if selected_option == 0:
+                continue  # Retry input
+            else:
+                exit(1)
 
 def get_keystore_entries(path, password):
     cmd = ["keytool", "-list", "-v", "-keystore", path, "-storepass", password]
@@ -318,7 +365,9 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_ACTIVE, 231, -1)
     curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
 
-    password = prompt_password(stdscr)
+    password = ""
+    if keystore_has_password(KEYSTORE_PATH):
+        password = prompt_password(stdscr)
 
     try:
         entries = get_keystore_entries(KEYSTORE_PATH, password)
