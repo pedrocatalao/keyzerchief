@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+
+import curses
+import subprocess
+import re
+
+# Hardcoded config
+KEYSTORE_PATH = "mykeystore.jks"
+
+# Colors
+COLOR_PAIR_SELECTED = 1
+COLOR_PAIR_HEADER = 2
+COLOR_PAIR_MENU = 3
+COLOR_PAIR_FKEYS = 4
+COLOR_PAIR_ACTIVE = 5
+COLOR_PAIR_INACTIVE = 6
+
+# Mouse support constants
+LEFT_PANEL = 0
+RIGHT_PANEL = 1
+
+KEY_IMPORT_TYPES = ["PKCS #12", "PKCS #8", "PVK", "OpenSSL"]
+
+def prompt_import_pkcs12_form(stdscr):
+    curses.echo()
+    height, width = stdscr.getmaxyx()
+    win_width = 60
+    win_height = 12
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
+    win.box()
+    win.addstr(1, 2, "Import PKCS #12 Key Pair")
+
+    labels = ["Key pair file:", "Decryption password:"]
+    values = ["", ""]
+    field_count = len(labels)
+    current = 0
+
+    buttons = ["Import", "Cancel"]
+    selected_button = 0
+
+    in_buttons = False
+
+    while True:
+        for i, label in enumerate(labels):
+            win.addstr(3 + i, 2, label)
+            attr = curses.A_REVERSE if (not in_buttons and i == current) else curses.A_NORMAL
+            display_value = values[i] if i == 0 else '*' * len(values[i])
+            win.addstr(3 + i, 22, display_value.ljust(30), attr)
+
+        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
+        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
+
+        win.addstr(7, 2, "[", curses.A_BOLD)
+        win.addstr(" Import ", import_attr | curses.A_BOLD)
+        win.addstr("]   [", curses.A_BOLD)
+        win.addstr(" Cancel ", cancel_attr | curses.A_BOLD)
+        win.addstr("]", curses.A_BOLD)
+
+        win.refresh()
+        key = win.getch()
+
+        if not in_buttons:
+            if key == curses.KEY_UP and current > 0:
+                current -= 1
+            elif key == curses.KEY_DOWN:
+                if current < field_count - 1:
+                    current += 1
+                else:
+                    in_buttons = True
+                    selected_button = 0
+            elif key in [curses.KEY_BACKSPACE, 127, 8]:
+                if values[current]:
+                    values[current] = values[current][:-1]
+            elif 32 <= key <= 126:
+                values[current] += chr(key)
+        else:
+            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+                selected_button = 1 - selected_button
+            elif key in [10, 13]:
+                if selected_button == 0 and all(values):
+                    curses.noecho()
+                    return {
+                        "key_file": values[0].strip(),
+                        "password": values[1].strip()
+                    }
+                else:
+                    return None
+            elif key == curses.KEY_UP:
+                in_buttons = False
+
+        if key == 27:
+            return None
+    curses.echo()
+    height, width = stdscr.getmaxyx()
+    win_width = 60
+    win_height = 10
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
+    win.box()
+    win.addstr(1, 2, "Import PKCS #12 Key Pair")
+
+    labels = ["Key pair file:", "Decryption password:"]
+    values = ["", ""]
+    current = 0
+
+    while True:
+        for i, label in enumerate(labels):
+            win.addstr(3 + i, 2, label)
+            attr = curses.A_REVERSE if i == current else curses.A_NORMAL
+            display_value = values[i] if i == 0 else '*' * len(values[i])
+            win.addstr(3 + i, 22, display_value.ljust(30), attr)
+        win.addstr(7, 2, "[ Import ]   [ Cancel ]", curses.A_BOLD)
+        win.refresh()
+
+        key = win.getch()
+
+        if key == curses.KEY_UP and current > 0:
+            current -= 1
+        elif key == curses.KEY_DOWN and current < len(labels) - 1:
+            current += 1
+        elif key in [10, 13]:
+            if all(values):
+                break
+        elif key == 27:
+            return None
+        elif key in [curses.KEY_BACKSPACE, 127, 8]:
+            if values[current]:
+                values[current] = values[current][:-1]
+        elif 32 <= key <= 126:
+            values[current] += chr(key)
+
+    curses.noecho()
+    return {
+        "key_file": values[0].strip(),
+        "password": values[1].strip()
+    }
+
+def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pass):
+    stdscr.clear()
+    stdscr.addstr(0, 2, "Importing key pair...", curses.A_BOLD)
+    stdscr.refresh()
+
+    import os
+    alias = os.path.splitext(os.path.basename(key_file))[0]
+    cmd = [
+        "keytool", "-importkeystore",
+        "-srckeystore", key_file,
+        "-srcstoretype", "PKCS12",
+        "-destkeystore", keystore_path,
+        "-deststorepass", keystore_pass,
+        "-srcstorepass", key_pass,
+        "-alias", alias,
+        "-destalias", alias
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    stdscr.clear()
+    if result.returncode == 0:
+        stdscr.addstr(2, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+    else:
+        stdscr.addstr(2, 2, "Import failed:", curses.A_BOLD)
+        stdscr.addstr(4, 2, result.stderr.strip())
+    stdscr.addstr(6, 2, "Press any key to continue.")
+    stdscr.refresh()
+    stdscr.getch()
+
+def prompt_import_key_type(stdscr):
+    height, width = stdscr.getmaxyx()
+    win_height = len(KEY_IMPORT_TYPES) + 4
+    win_width = max(len(t) for t in KEY_IMPORT_TYPES) + 10
+    win = curses.newwin(win_height, win_width, (height - win_height) // 2, (width - win_width) // 2)
+    win.keypad(True)
+    win.box()
+    win.addstr(1, 2, "Import Key Pair")
+    selected = 0
+
+    while True:
+        for i, option in enumerate(KEY_IMPORT_TYPES):
+            mode = curses.A_REVERSE if i == selected else curses.A_NORMAL
+            win.addstr(3 + i, 4, option.ljust(win_width - 8), mode)
+        win.refresh()
+        key = win.getch()
+        if key == curses.KEY_UP and selected > 0:
+            selected -= 1
+        elif key == curses.KEY_DOWN and selected < len(KEY_IMPORT_TYPES) - 1:
+            selected += 1
+        elif key in [10, 13]:
+            return KEY_IMPORT_TYPES[selected]
+        elif key in [27]:
+            return None
+
+def prompt_password(stdscr):
+    while True:
+        stdscr.clear()
+        curses.noecho()
+        height, width = stdscr.getmaxyx()
+        prompt = "Enter keystore password: "
+        stdscr.addstr(height // 2, (width - len(prompt)) // 2, prompt)
+        stdscr.refresh()
+
+        win = curses.newwin(1, 30, height // 2, (width + len(prompt)) // 2)
+        win.keypad(True)
+        password = ""
+
+        while True:
+            ch = win.getch()
+            if ch in [10, 13]:  # Enter
+                break
+            elif ch in [27]:  # ESC
+                return ""
+            elif ch in [curses.KEY_BACKSPACE, 127, 8]:
+                if len(password) > 0:
+                    password = password[:-1]
+                    win.delch(0, len(password))
+                    win.move(0, len(password))
+            elif 32 <= ch <= 126:
+                if len(password) < 30:
+                    password += chr(ch)
+                    win.addch(0, len(password) - 1, '*')
+
+        try:
+            _ = get_keystore_entries(KEYSTORE_PATH, password)
+            return password
+        except Exception as e:
+            stdscr.addstr(height // 2 + 2, (width - len(str(e))) // 2, str(e), curses.A_BOLD | curses.color_pair(COLOR_PAIR_HEADER))
+            stdscr.addstr(height // 2 + 3, (width - 24) // 2, "Press any key to try again")
+            stdscr.refresh()
+            stdscr.getch()
+
+def get_keystore_entries(path, password):
+    cmd = ["keytool", "-list", "-v", "-keystore", path, "-storepass", password]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        raise Exception("Failed to load keystore:\n" + result.stderr)
+
+    entries = []
+    current_entry = {}
+    lines = result.stdout.splitlines()[4:]  # Skip first 4 lines
+    for line in lines:
+        line = line.strip()
+        if line.startswith("Alias name:"):
+            if current_entry:
+                entries.append(current_entry)
+            current_entry = {"Alias name": line.split("Alias name:")[1].strip()}
+        elif ":" in line:
+            key, value = map(str.strip, line.split(":", 1))
+            current_entry[key] = value
+    if current_entry:
+        entries.append(current_entry)
+
+    # Pre-render each entry's details into strings
+    for entry in entries:
+        detail_lines = []
+        priority = ["Alias name", "Entry type", "Creation date"]
+        keys = priority + [k for k in entry if k not in priority]
+        for key in keys:
+            value = entry.get(key, "")
+            detail_lines.append((key, value))
+        entry["__rendered__"] = detail_lines
+
+    return entries
+
+def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel):
+    stdscr.clear()
+    height, width = stdscr.getmaxyx()
+    panel_width = width // 2
+    max_detail_width = width - panel_width - 5
+    visible_height = height - 6
+
+    # Menu bar
+    stdscr.attron(curses.color_pair(COLOR_PAIR_MENU))
+    stdscr.addstr(0, 0, " " * width)
+    stdscr.addstr(0, 1, " Left      File      Options      Right ")
+    stdscr.attroff(curses.color_pair(COLOR_PAIR_MENU))
+
+
+    # Frame
+    stdscr.hline(1, 1, curses.ACS_HLINE, width - 2)
+    stdscr.hline(height - 2, 1, curses.ACS_HLINE, width - 2)
+    stdscr.vline(2, 0, curses.ACS_VLINE, height - 4)
+    stdscr.vline(2, width - 1, curses.ACS_VLINE, height - 4)
+    stdscr.addch(1, 0, curses.ACS_ULCORNER)
+    stdscr.addch(1, width - 1, curses.ACS_URCORNER)
+    stdscr.addch(height - 2, 0, curses.ACS_LLCORNER)
+    stdscr.addch(height - 2, width - 1, curses.ACS_LRCORNER)
+
+    # Left panel
+    stdscr.attron(curses.color_pair(COLOR_PAIR_HEADER))
+    stdscr.addstr(2, 2, f"Keystore: {KEYSTORE_PATH}")
+    stdscr.attroff(curses.color_pair(COLOR_PAIR_HEADER))
+
+    for y in range(2, height - 2):
+        stdscr.addch(y, panel_width, curses.ACS_VLINE)
+
+    if selected < scroll_offset:
+        scroll_offset = selected
+    elif selected >= scroll_offset + visible_height:
+        scroll_offset = selected - visible_height + 1
+
+    for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
+        entry = entries[i]
+        alias = entry.get("Alias name", "<unknown>")
+        if active_panel == LEFT_PANEL:
+            attr = curses.color_pair(COLOR_PAIR_SELECTED) if i == selected else curses.color_pair(COLOR_PAIR_ACTIVE)
+        else:
+            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
+        stdscr.addstr(4 + i - scroll_offset, 2, alias[:panel_width - 3], attr)
+
+    # Right panel
+    stdscr.attron(curses.color_pair(COLOR_PAIR_HEADER))
+    stdscr.addstr(2, panel_width + 2, "Details:")
+    stdscr.attroff(curses.color_pair(COLOR_PAIR_HEADER))
+
+    detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
+    line_num = 4
+    for key, value in detail_lines:
+        lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
+        if line_num >= height - 2:
+            break
+        attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
+        stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
+        line_num += 1
+        for l in lines:
+            if line_num >= height - 2:
+                break
+            stdscr.addstr(line_num, panel_width + 4, l, attr)
+            line_num += 1
+
+    # Draw Footer
+    footer_options = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5SetPwd", " 6RmPwd", " 7ImpFromWeb", " 8Delete", " 9PullDn", "10Quit"]
+    spacing = width // len(footer_options)
+    for i, (item) in enumerate(footer_options):
+        stdscr.addstr(height - 1, i * spacing, item[:2], curses.color_pair(4))
+        stdscr.addstr(height - 1, i * spacing + 2, item[2:].ljust(spacing - 2), curses.color_pair(2))
+
+    stdscr.refresh()
+
+def main(stdscr):
+    curses.curs_set(0)
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
+    curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
+    curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+    curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
+    curses.init_pair(COLOR_PAIR_ACTIVE, 231, -1)
+    curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
+
+    password = prompt_password(stdscr)
+
+    try:
+        entries = get_keystore_entries(KEYSTORE_PATH, password)
+    except Exception as e:
+        stdscr.clear()
+        stdscr.addstr(0, 2, str(e))
+        stdscr.getch()
+        return
+
+    selected = 0
+    scroll_offset = 0
+    detail_scroll = 0
+    active_panel = 0
+
+    while True:
+        draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel)
+        key = stdscr.getch()
+
+        if key == curses.KEY_UP:
+            if active_panel == 0 and selected > 0:
+                selected -= 1
+            elif active_panel == 1 and detail_scroll > 0:
+                detail_scroll -= 1
+        elif key == curses.KEY_DOWN:
+            if active_panel == 0 and selected < len(entries) - 1:
+                selected += 1
+            elif active_panel == 1:
+                detail_scroll += 1
+        elif key == ord('\t') or key == 9:
+            active_panel = 1 if active_panel == 0 else 0
+        elif key in [ord('q'), ord('Q'), 27, curses.KEY_F10]:
+            break
+        elif key == curses.KEY_F4:
+            choice = prompt_import_key_type(stdscr)
+            if choice == "PKCS #12":
+                form_data = prompt_import_pkcs12_form(stdscr)
+                if form_data:
+                    import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+            elif choice:
+                stdscr.clear()
+                stdscr.addstr(0, 2, f"Selected type: {choice}")
+                stdscr.addstr(1, 2, "[Import form not implemented yet - press any key]")
+                stdscr.refresh()
+                stdscr.getch()
+
+curses.wrapper(main)
