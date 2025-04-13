@@ -117,13 +117,11 @@ def prompt_import_pkcs12_form(stdscr):
         if key == 27:
             return None
 
-
 def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pass):
     stdscr.clear()
     stdscr.addstr(0, 2, "Importing key pair...", curses.A_BOLD)
     stdscr.refresh()
 
-    import os
     alias = os.path.splitext(os.path.basename(key_file))[0]
     cmd = [
         "keytool", "-importkeystore",
@@ -139,6 +137,7 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pa
     stdscr.clear()
     if result.returncode == 0:
         stdscr.addstr(2, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+        return alias
     else:
         stdscr.addstr(2, 2, "Import failed:", curses.A_BOLD)
         stdscr.addstr(4, 2, result.stderr.strip())
@@ -178,6 +177,7 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
         keytool_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if keytool_result.returncode == 0:
             stdscr.addstr(0, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+            return alias
         else:
             stdscr.addstr(0, 2, "Import failed:", curses.A_BOLD)
             stdscr.addstr(2, 2, keytool_result.stderr.strip())
@@ -328,6 +328,101 @@ def prompt_import_key_type(stdscr):
         elif key in [27]:
             return None
 
+def import_cert_from_url(stdscr, url, password):
+    stdscr.clear()
+    stdscr.addstr(0, 2, f"Fetching certificate from {url}...", curses.A_BOLD)
+    stdscr.refresh()
+
+    try:
+        for prefix in ["https://", "http://", "https:/", "http:/"]:
+            if url.startswith(prefix):
+                url = url[len(prefix):]
+
+        parts = url.split(":")
+        host = parts[0]
+        port = parts[1] if len(parts) > 1 else "443"
+
+        cert_path = f"/tmp/cert_from_{url.replace(':', '_').replace('/', '_')}.crt"
+        cmd = [
+            "openssl", "s_client", "-showcerts",
+            "-servername", host,
+            "-connect", f"{host}:{port}"
+        ]
+        fetch = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, timeout=5)
+        print(fetch.stdout)
+        start = fetch.stdout.find("-----BEGIN CERTIFICATE-----")
+        end = fetch.stdout.find("-----END CERTIFICATE-----") + len("-----END CERTIFICATE-----")
+        cert = fetch.stdout[start:end]
+
+        if "-----BEGIN CERTIFICATE-----" not in cert:
+            raise Exception("Could not extract certificate")
+
+        with open(cert_path, "w") as f:
+            f.write(cert)
+
+        alias = url.split(':')[0]
+        import_cmd = [
+            "keytool", "-importcert",
+            "-alias", alias,
+            "-keystore", KEYSTORE_PATH,
+            "-storepass", password,
+            "-file", cert_path,
+            "-noprompt"
+        ]
+        result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdscr.clear()
+        if result.returncode == 0:
+            stdscr.addstr(2, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
+            return alias
+        else:
+            stdscr.addstr(2, 2, "Import failed:", curses.A_BOLD)
+            stdscr.addstr(4, 2, result.stderr.strip())
+
+    except Exception as e:
+        stdscr.addstr(2, 2, f"Error: {str(e)}", curses.A_BOLD)
+
+    stdscr.addstr(4, 2, "Press any key to continue.")
+    stdscr.refresh()
+    stdscr.getch()
+
+
+def prompt_url_input(stdscr):
+    curses.echo()
+    height, width = stdscr.getmaxyx()
+    win_width = 60
+    win_height = 7
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.box()
+    win.addstr(1, 2, "Import SSL Certificate from Website")
+    win.addstr(3, 2, "Hostname:Port (e.g. example.com:443):")
+    win.refresh()
+
+    input_win = curses.newwin(1, win_width - 4, start_y + 4, start_x + 2)
+    curses.curs_set(1)
+    input_win.keypad(True)
+    value = ""
+    while True:
+        input_win.clear()
+        input_win.addstr(0, 0, value)
+        input_win.refresh()
+        ch = input_win.getch()
+        if ch in [10, 13]:
+            break
+        elif ch in [27]:
+            return None
+        elif ch in [curses.KEY_BACKSPACE, 127, 8]:
+            value = value[:-1]
+        elif 32 <= ch <= 126:
+            if len(value) < win_width - 6:
+                value += chr(ch)
+
+    curses.curs_set(0)
+    curses.noecho()
+    return value.strip()
+
 def keystore_has_password(keystore_path):
     try:
         # Try listing the keystore using an empty password
@@ -436,6 +531,12 @@ def get_keystore_entries(path, password):
         entry["__rendered__"] = detail_lines
 
     return entries
+
+def find_entry_index_by_alias(entries, alias):
+    for i, entry in enumerate(entries):
+        if entry.get("Alias name") == alias:
+            return i
+    return 0
 
 def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes):
     stdscr.clear()
@@ -631,20 +732,30 @@ def main(stdscr):
             else:
                 break
 
+        elif key == curses.KEY_F5:
+            url = prompt_url_input(stdscr)
+            if url:
+                alias = import_cert_from_url(stdscr, url, password)
+                entries = get_keystore_entries(KEYSTORE_PATH, password)
+                selected = find_entry_index_by_alias(entries, alias)
+                has_unsaved_changes = True
+
         elif key == curses.KEY_F4:
             choice = prompt_import_key_type(stdscr)
             if choice == "PKCS #12":
                 form_data = prompt_import_pkcs12_form(stdscr)
                 if form_data:
-                    import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
-                    has_unsaved_changes = True
+                    alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
                     entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    has_unsaved_changes = True
             elif choice == "PKCS #8":
                 form_data = prompt_import_pkcs8_form(stdscr)
                 if form_data:
-                    import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
-                    has_unsaved_changes = True
+                    alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
                     entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    has_unsaved_changes = True
 
         elif key == curses.KEY_F7:
             confirm_height, confirm_width = 7, 50
