@@ -6,6 +6,11 @@ import shutil
 import tempfile
 import sys
 import os
+import time
+import base64
+import gzip
+import chardet
+from io import BytesIO
 
 # Config from argument
 if len(sys.argv) < 2:
@@ -706,6 +711,23 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 
     stdscr.refresh()
 
+def show_intro(stdscr):
+    stdscr.clear()
+    height, width = stdscr.getmaxyx()    
+    ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
+    compressed_data = base64.b64decode(ascii_art_base64)
+    with gzip.GzipFile(fileobj=BytesIO(compressed_data)) as f:
+        ascii_art_lines = f.read().decode('utf-8').splitlines()
+
+    y_start = (height - len(ascii_art_lines)) // 2
+    x = (width - 18) // 2
+    for i, line in enumerate(ascii_art_lines):
+        stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
+    stdscr.refresh()
+    stdscr.getch()
+
+    time.sleep(2)
+
 def main(stdscr):
     curses.curs_set(0)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
@@ -719,6 +741,8 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
+
+    show_intro(stdscr)
 
     password = ""
     if keystore_has_password(KEYSTORE_PATH):
