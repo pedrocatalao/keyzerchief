@@ -328,7 +328,73 @@ def prompt_import_key_type(stdscr):
         elif key in [27]:
             return None
 
-def import_cert_from_url(stdscr, url, password):
+def import_cert_file(stdscr, password):
+    curses.echo()
+    height, width = stdscr.getmaxyx()
+    win_width = 60
+    win_height = 7
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.box()
+    win.addstr(1, 2, "Import Certificate File")
+    win.addstr(3, 2, "Path to certificate file:")
+    win.refresh()
+
+    input_win = curses.newwin(1, win_width - 4, start_y + 4, start_x + 2)
+    curses.curs_set(1)
+    input_win.keypad(True)
+    value = ""
+    while True:
+        input_win.clear()
+        input_win.addstr(0, 0, value)
+        input_win.refresh()
+        ch = input_win.getch()
+        if ch in [10, 13]:
+            break
+        elif ch in [27]:
+            return None
+        elif ch in [curses.KEY_BACKSPACE, 127, 8]:
+            value = value[:-1]
+        elif 32 <= ch <= 126:
+            if len(value) < win_width - 6:
+                value += chr(ch)
+
+    curses.curs_set(0)
+    curses.noecho()
+
+    cert_file = value.strip()
+    if cert_file and os.path.isfile(cert_file):
+        alias = os.path.splitext(os.path.basename(cert_file))[0]
+        import_cmd = [
+            "keytool", "-importcert",
+            "-alias", alias,
+            "-keystore", KEYSTORE_PATH,
+            "-storepass", password,
+            "-file", cert_file,
+            "-noprompt"
+        ]
+        stdscr.clear()
+        stdscr.addstr(2, 2, f"Importing {cert_file}...", curses.A_BOLD)
+        stdscr.refresh()
+        result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            stdscr.addstr(4, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+            stdscr.addstr(6, 2, "Press any key to continue.")
+            stdscr.refresh()
+            stdscr.getch()
+            return alias
+        else:
+            stdscr.addstr(4, 2, "Import failed:", curses.A_BOLD)
+            stdscr.addstr(6, 2, result.stderr.strip())
+            stdscr.addstr(8, 2, "Press any key to continue.")
+            stdscr.refresh()
+            stdscr.getch()
+    return None
+
+def import_cert_from_url(stdscr, password):
+    url = prompt_url_input(stdscr)
     stdscr.clear()
     stdscr.addstr(0, 2, f"Fetching certificate from {url}...", curses.A_BOLD)
     stdscr.refresh()
@@ -733,12 +799,16 @@ def main(stdscr):
                 break
 
         elif key == curses.KEY_F5:
-            url = prompt_url_input(stdscr)
-            if url:
-                alias = import_cert_from_url(stdscr, url, password)
-                entries = get_keystore_entries(KEYSTORE_PATH, password)
-                selected = find_entry_index_by_alias(entries, alias)
-                has_unsaved_changes = True
+            alias = import_cert_from_url(stdscr, password)
+            entries = get_keystore_entries(KEYSTORE_PATH, password)
+            selected = find_entry_index_by_alias(entries, alias)
+            has_unsaved_changes = True
+
+        elif key == curses.KEY_F3:
+            alias = import_cert_file(stdscr, password)
+            entries = get_keystore_entries(KEYSTORE_PATH, password)
+            selected = find_entry_index_by_alias(entries, alias)
+            has_unsaved_changes = True
 
         elif key == curses.KEY_F4:
             choice = prompt_import_key_type(stdscr)
