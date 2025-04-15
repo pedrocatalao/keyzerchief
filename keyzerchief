@@ -35,7 +35,7 @@ COLOR_PAIR_INACTIVE = 6
 COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
 COLOR_PAIR_RED = 9
-COLOR_PAIR_GOLD = 10
+COLOR_PAIR_HEADER = 10
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -656,12 +656,13 @@ def prompt_password(win):
         curses.noecho()
         win.addstr(4, 26, "Keyzer Chief 0.9b", curses.color_pair(COLOR_PAIR_HEADER))
         win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_HEADER))
-        prompt = "Keystore password: "
+        prompt = "Keystore password:"
         for i in range(len(prompt)):
-            win.addstr(13, 26, prompt[:i+1], curses.color_pair(COLOR_PAIR_HEADER))
+            win.addstr(13, 25, prompt[:i+1], curses.color_pair(COLOR_PAIR_HEADER))
             win.refresh()
             curses.napms(30)
-        keypad_win = curses.newwin(1, 20, win_y + 14, win_x + 26)
+        keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
+        keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
         keypad_win.keypad(True)
         win.refresh()
         password = ""
@@ -673,6 +674,7 @@ def prompt_password(win):
                     password = ""
                     shake_logo(win)
                     keypad_win.clear()
+                    keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
                 else:
                     fade_logo(win)
                     return password
@@ -682,12 +684,14 @@ def prompt_password(win):
             elif ch in [curses.KEY_BACKSPACE, 127, 8]:
                 if len(password) > 0:
                     password = password[:-1]
-                    keypad_win.delch(0, len(password))
+                    keypad_win.addch(0, len(password), ' ', curses.color_pair(COLOR_PAIR_SELECTED))
                     keypad_win.move(0, len(password))
             elif 32 <= ch <= 126:
+                if len(password)+1 > 24:
+                    break
                 if len(password) < 30:
                     password += chr(ch)
-                    keypad_win.addch(0, len(password) - 1, '*')
+                    keypad_win.addch(0, len(password) - 1, '*', curses.color_pair(COLOR_PAIR_SELECTED))
 
 def get_logo_lines():
     ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
@@ -717,13 +721,13 @@ def show_logo(win):
     for _ in range(15):
         for i, row in enumerate(temp_lines):
             line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
-            win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_GOLD))
+            win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
         win.refresh()
         curses.napms(50)
 
     # Final logo render
     for i, line in enumerate(logo_lines):
-        win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_GOLD))
+        win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
     win.refresh()
     curses.napms(400)
 
@@ -731,7 +735,7 @@ def fade_logo(win):
     logo_x = 4
     logo_y = 2
     logo_lines = get_logo_lines()
-    yellows = [220, 178, 136, 100, 58, 236]
+    yellows = [220, 178, 136, 100, 58, 236, 234]
     for idx, color in enumerate(yellows):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
@@ -749,7 +753,7 @@ def shake_logo(win):
             win.addstr(logo_y + i, logo_x, " " * (len(line)+1))
         win.refresh()
         for i, line in enumerate(logo_lines):
-            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_GOLD))
+            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_HEADER))
         win.refresh()
         curses.napms(50)
 
@@ -767,7 +771,6 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
-    curses.init_pair(COLOR_PAIR_GOLD, 220, -1)
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win)
