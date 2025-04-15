@@ -35,7 +35,7 @@ COLOR_PAIR_INACTIVE = 6
 COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
 COLOR_PAIR_GREEN = 9
-COLOR_PAIR_HEADER = 10
+COLOR_PAIR_RED = 10
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -681,12 +681,12 @@ def prompt_password(win):
                     keypad_win.move(0,0)
                     curses.curs_set(1)
                 else:
-                    fade_logo(win)
+                    fade_logo(win, [82, 46, 40, 34, 28, 22, 236, 234])
                     curses.curs_set(0)
                     return password
             elif ch in [27]:  # ESC
                 curses.curs_set(0)
-                fade_logo(win)
+                fade_logo(win, [220, 178, 136, 100, 58, 236, 234])
                 exit(1)
             elif ch in [curses.KEY_BACKSPACE, 127, 8]:
                 if len(password) > 0:
@@ -719,19 +719,20 @@ def intro_window(stdscr):
     intro_win.addstr(box_height - 1, label_x, esc_label)
     return intro_win
 
-def show_logo(win):
+def show_logo(win, final):
     logo_x = 4
     logo_y = 2
     logo_lines = get_logo_lines()
 
     # Scramble effect before revealing
-    temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
-    for _ in range(15):
-        for i, row in enumerate(temp_lines):
-            line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
-            win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
-        win.refresh()
-        curses.napms(50)
+    if not final:
+        temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
+        for _ in range(15):
+            for i, row in enumerate(temp_lines):
+                line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
+                win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
+            win.refresh()
+            curses.napms(50)
 
     # Final logo render
     for i, line in enumerate(logo_lines):
@@ -739,11 +740,10 @@ def show_logo(win):
     win.refresh()
     curses.napms(400)
 
-def fade_logo(win):
+def fade_logo(win, fading_colors):
     logo_x = 4
     logo_y = 2
     logo_lines = get_logo_lines()
-    fading_colors = [220, 178, 136, 100, 58, 236, 234]
     for idx, color in enumerate(fading_colors):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
@@ -761,9 +761,10 @@ def shake_logo(win):
             win.addstr(logo_y + i, logo_x, " " * (len(line)+1))
         win.refresh()
         for i, line in enumerate(logo_lines):
-            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_HEADER))
+            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_RED))
         win.refresh()
         curses.napms(50)
+    show_logo(win, True)
 
 def main(stdscr):
     curses.curs_set(0)
@@ -779,9 +780,10 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_GREEN, curses.COLOR_GREEN, -1)
+    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
 
     intro_win = intro_window(stdscr)
-    show_logo(intro_win)
+    show_logo(intro_win, False)
 
     password = ""
     if not check_password(KEYSTORE_PATH, ""):
