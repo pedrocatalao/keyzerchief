@@ -585,6 +585,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     stdscr.addstr(height - 2, panel_width - 7, "─┤")
     stdscr.addstr("b", curses.color_pair(COLOR_PAIR_DARK))
     stdscr.addstr("ot├")
+
     # Right panel box
     stdscr.addch(1, panel_width, curses.ACS_ULCORNER)
     stdscr.addch(1, width - 1, curses.ACS_URCORNER)
@@ -616,7 +617,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
             attr = curses.color_pair(COLOR_PAIR_INACTIVE)
         stdscr.addstr(y_pos, 2, alias[:panel_width - 3], attr)
 
-    # Right panel
+    # Right panel content
     stdscr.attroff(curses.color_pair(COLOR_PAIR_HEADER))
 
     detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
@@ -649,95 +650,107 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 
     stdscr.refresh()
 
-def prompt_password(stdscr):
+def prompt_password(win):
+    win_y, win_x = win.getbegyx()
     while True:
         curses.noecho()
-        height, width = stdscr.getmaxyx()
-        prompt = "Password: "
-        stdscr.addstr(height // 2 + 10, (width - len(prompt)) // 2, prompt)
-        stdscr.refresh()
-
-        win = curses.newwin(1, 15, height // 2 + 10, (width + len(prompt)) // 2)
-        win.keypad(True)
+        win.addstr(4, 26, "Keyzer Chief 0.9b", curses.color_pair(COLOR_PAIR_HEADER))
+        win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_HEADER))
+        prompt = "Keystore password: "
+        for i in range(len(prompt)):
+            win.addstr(13, 26, prompt[:i+1], curses.color_pair(COLOR_PAIR_HEADER))
+            win.refresh()
+            curses.napms(30)
+        keypad_win = curses.newwin(1, 20, win_y + 14, win_x + 26)
+        keypad_win.keypad(True)
+        win.refresh()
         password = ""
 
         while True:
-            ch = win.getch()
+            ch = keypad_win.getch()
             if ch in [10, 13]:  # Enter
                 if not check_password(KEYSTORE_PATH, password):
-                    win.clear()
                     password = ""
-                    shake_logo(stdscr)
+                    shake_logo(win)
+                    keypad_win.clear()
                 else:
-                    fade_logo(stdscr)
+                    fade_logo(win)
                     return password
             elif ch in [27]:  # ESC
-                fade_logo(stdscr)
+                fade_logo(win)
                 exit(1)
             elif ch in [curses.KEY_BACKSPACE, 127, 8]:
                 if len(password) > 0:
                     password = password[:-1]
-                    win.delch(0, len(password))
-                    win.move(0, len(password))
+                    keypad_win.delch(0, len(password))
+                    keypad_win.move(0, len(password))
             elif 32 <= ch <= 126:
                 if len(password) < 30:
                     password += chr(ch)
-                    win.addch(0, len(password) - 1, '*')
+                    keypad_win.addch(0, len(password) - 1, '*')
 
 def get_logo_lines():
     ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
     compressed_data = base64.b64decode(ascii_art_base64)
     with gzip.GzipFile(fileobj=BytesIO(compressed_data)) as f:
         return f.read().decode('utf-8').splitlines()
-
-def show_logo(stdscr):
-    stdscr.clear()
-    logo_lines = get_logo_lines()
+    
+def intro_window(stdscr):
     height, width = stdscr.getmaxyx()
-    y_start = (height - len(logo_lines)) // 2
-    x = (width - 18) // 2
+    box_width = 50
+    box_height = max(len(get_logo_lines()), 5) + 5
+    box_y = (height - box_height) // 2
+    box_x = (width - box_width) // 2
+    intro_win = curses.newwin(box_height, box_width, box_y, box_x)
+    intro_win.attron(curses.color_pair(COLOR_PAIR_DARK))
+    intro_win.border()
+    intro_win.attroff(curses.color_pair(COLOR_PAIR_DARK))
+    return intro_win
+
+def show_logo(win):
+    logo_x = 4
+    logo_y = 2
+    logo_lines = get_logo_lines()
 
     # Scramble effect before revealing
     temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
     for _ in range(15):
         for i, row in enumerate(temp_lines):
             line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
-            stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_GOLD))
-        stdscr.refresh()
+            win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_GOLD))
+        win.refresh()
         curses.napms(50)
 
     # Final logo render
     for i, line in enumerate(logo_lines):
-        stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_GOLD))
-    stdscr.refresh()
+        win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_GOLD))
+    win.refresh()
     curses.napms(400)
 
-def fade_logo(stdscr):
+def fade_logo(win):
+    logo_x = 4
+    logo_y = 2
     logo_lines = get_logo_lines()
-    height, width = stdscr.getmaxyx()
-    y_start = (height - len(logo_lines)) // 2
-    x = (width - 18) // 2
     yellows = [220, 178, 136, 100, 58, 236]
     for idx, color in enumerate(yellows):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
-            stdscr.addstr(y_start + i, x, line, curses.color_pair(30 + idx) | curses.A_DIM)
-        stdscr.refresh()
+            win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
+        win.refresh()
         curses.napms(100)
-        stdscr.clear()
+        win.clear()
 
-def shake_logo(stdscr):
+def shake_logo(win):
+    logo_x = 4
+    logo_y = 2
     logo_lines = get_logo_lines()
-    height, width = stdscr.getmaxyx()
-    y_start = (height - len(logo_lines)) // 2
-    x_center = (width - 18) // 2
     for shake in [-1, 1, -1, 1, 0]:
         for i, line in enumerate(logo_lines):
-            stdscr.addstr(y_start + i, x_center, " " * (len(line)+1))
-        stdscr.refresh()
+            win.addstr(logo_y + i, logo_x, " " * (len(line)+1))
+        win.refresh()
         for i, line in enumerate(logo_lines):
-            stdscr.addstr(y_start + i, x_center + shake, line, curses.color_pair(COLOR_PAIR_GOLD))
-        stdscr.refresh()
+            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_GOLD))
+        win.refresh()
         curses.napms(50)
 
 def main(stdscr):
@@ -756,11 +769,12 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
     curses.init_pair(COLOR_PAIR_GOLD, 220, -1)
 
-    show_logo(stdscr)
+    intro_win = intro_window(stdscr)
+    show_logo(intro_win)
 
     password = ""
     if not check_password(KEYSTORE_PATH, ""):
-        password = prompt_password(stdscr)
+        password = prompt_password(intro_win)
 
     try:
         entries = get_keystore_entries(KEYSTORE_PATH, password)
