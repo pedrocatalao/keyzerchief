@@ -34,7 +34,7 @@ COLOR_PAIR_ACTIVE = 5
 COLOR_PAIR_INACTIVE = 6
 COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
-COLOR_PAIR_RED = 9
+COLOR_PAIR_GREEN = 9
 COLOR_PAIR_HEADER = 10
 
 # Mouse support constants
@@ -652,6 +652,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 
 def prompt_password(win):
     win_y, win_x = win.getbegyx()
+    curses.curs_set(1)
     while True:
         curses.noecho()
         win.addstr(4, 26, "Keyzer Chief 0.9b", curses.color_pair(COLOR_PAIR_HEADER))
@@ -664,6 +665,7 @@ def prompt_password(win):
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
         keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
         keypad_win.keypad(True)
+        keypad_win.move(0,0)
         win.refresh()
         password = ""
 
@@ -671,14 +673,19 @@ def prompt_password(win):
             ch = keypad_win.getch()
             if ch in [10, 13]:  # Enter
                 if not check_password(KEYSTORE_PATH, password):
+                    curses.curs_set(0)
                     password = ""
                     shake_logo(win)
                     keypad_win.clear()
                     keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
+                    keypad_win.move(0,0)
+                    curses.curs_set(1)
                 else:
                     fade_logo(win)
+                    curses.curs_set(0)
                     return password
             elif ch in [27]:  # ESC
+                curses.curs_set(0)
                 fade_logo(win)
                 exit(1)
             elif ch in [curses.KEY_BACKSPACE, 127, 8]:
@@ -706,9 +713,10 @@ def intro_window(stdscr):
     box_y = (height - box_height) // 2
     box_x = (width - box_width) // 2
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
-    intro_win.attron(curses.color_pair(COLOR_PAIR_DARK))
     intro_win.border()
-    intro_win.attroff(curses.color_pair(COLOR_PAIR_DARK))
+    esc_label = "─┤Esc➜quit├"
+    label_x = box_width - len(esc_label) - 1
+    intro_win.addstr(box_height - 1, label_x, esc_label)
     return intro_win
 
 def show_logo(win):
@@ -735,8 +743,8 @@ def fade_logo(win):
     logo_x = 4
     logo_y = 2
     logo_lines = get_logo_lines()
-    yellows = [220, 178, 136, 100, 58, 236, 234]
-    for idx, color in enumerate(yellows):
+    fading_colors = [220, 178, 136, 100, 58, 236, 234]
+    for idx, color in enumerate(fading_colors):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
             win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
@@ -749,7 +757,7 @@ def shake_logo(win):
     logo_y = 2
     logo_lines = get_logo_lines()
     for shake in [-1, 1, -1, 1, 0]:
-        for i, line in enumerate(logo_lines):
+        for i, line in enumerate(logo_lines): # Clean previous frame
             win.addstr(logo_y + i, logo_x, " " * (len(line)+1))
         win.refresh()
         for i, line in enumerate(logo_lines):
@@ -770,7 +778,7 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
-    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
+    curses.init_pair(COLOR_PAIR_GREEN, curses.COLOR_GREEN, -1)
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win)
@@ -778,6 +786,8 @@ def main(stdscr):
     password = ""
     if not check_password(KEYSTORE_PATH, ""):
         password = prompt_password(intro_win)
+    else:
+        fade_logo(intro_win)
 
     try:
         entries = get_keystore_entries(KEYSTORE_PATH, password)
