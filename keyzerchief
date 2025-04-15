@@ -6,10 +6,9 @@ import shutil
 import tempfile
 import sys
 import os
-import time
 import base64
 import gzip
-import chardet
+import random
 from io import BytesIO
 
 # Config from argument
@@ -35,6 +34,8 @@ COLOR_PAIR_ACTIVE = 5
 COLOR_PAIR_INACTIVE = 6
 COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
+COLOR_PAIR_RED = 9
+COLOR_PAIR_GOLD = 10
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -495,80 +496,17 @@ def prompt_url_input(stdscr):
     curses.noecho()
     return value.strip()
 
-def keystore_has_password(keystore_path):
+def check_password(keystore_path, password):
     try:
         subprocess.run(
-            ["keytool", "-list", "-keystore", keystore_path, "-storepass", ""],
+            ["keytool", "-list", "-keystore", keystore_path, "-storepass", password],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-        return False
-    except subprocess.CalledProcessError:
         return True
-
-def prompt_password(stdscr):
-    while True:
-        stdscr.clear()
-        curses.noecho()
-        height, width = stdscr.getmaxyx()
-        prompt = "Enter keystore password: "
-        stdscr.addstr(height // 2, (width - len(prompt)) // 2, prompt)
-        stdscr.refresh()
-
-        win = curses.newwin(1, 30, height // 2, (width + len(prompt)) // 2)
-        win.keypad(True)
-        password = ""
-
-        while True:
-            ch = win.getch()
-            if ch in [10, 13]:  # Enter
-                break
-            elif ch in [27]:  # ESC
-                return ""
-            elif ch in [curses.KEY_BACKSPACE, 127, 8]:
-                if len(password) > 0:
-                    password = password[:-1]
-                    win.delch(0, len(password))
-                    win.move(0, len(password))
-            elif 32 <= ch <= 126:
-                if len(password) < 30:
-                    password += chr(ch)
-                    win.addch(0, len(password) - 1, '*')
-
-        try:
-            _ = get_keystore_entries(KEYSTORE_PATH, password)
-            return password
-        except Exception as e:
-            stdscr.addstr(height // 2 + 2, (width - len(str(e))) // 2, str(e), curses.A_BOLD | curses.color_pair(COLOR_PAIR_HEADER))
-
-            # Retry confirmation popup
-            confirm_height, confirm_width = 5, 40
-            confirm_y = (height - confirm_height) // 2
-            confirm_x = (width - confirm_width) // 2
-            confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
-            confirm_win.keypad(True)
-            confirm_win.box()
-            confirm_win.addstr(1, 2, "Password incorrect. Retry?")
-
-            selected_option = 0
-            options = ["Yes", "No"]
-
-            while True:
-                for i, label in enumerate(options):
-                    attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
-                    confirm_win.addstr(3, 2 + i * 10, f" {label} ", attr)
-                confirm_win.refresh()
-                k = confirm_win.getch()
-                if k in [curses.KEY_LEFT, curses.KEY_RIGHT]:
-                    selected_option = 1 - selected_option
-                elif k in [10, 13]:
-                    break
-
-            if selected_option == 0:
-                continue  # Retry input
-            else:
-                exit(1)
+    except subprocess.CalledProcessError:
+        return False
 
 def check_unsaved_changes():
     try:
@@ -711,22 +649,96 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 
     stdscr.refresh()
 
-def show_intro(stdscr):
-    stdscr.clear()
-    height, width = stdscr.getmaxyx()    
+def prompt_password(stdscr):
+    while True:
+        curses.noecho()
+        height, width = stdscr.getmaxyx()
+        prompt = "Password: "
+        stdscr.addstr(height // 2 + 10, (width - len(prompt)) // 2, prompt)
+        stdscr.refresh()
+
+        win = curses.newwin(1, 15, height // 2 + 10, (width + len(prompt)) // 2)
+        win.keypad(True)
+        password = ""
+
+        while True:
+            ch = win.getch()
+            if ch in [10, 13]:  # Enter
+                if not check_password(KEYSTORE_PATH, password):
+                    win.clear()
+                    password = ""
+                    shake_logo(stdscr)
+                else:
+                    fade_logo(stdscr)
+                    return password
+            elif ch in [27]:  # ESC
+                fade_logo(stdscr)
+                exit(1)
+            elif ch in [curses.KEY_BACKSPACE, 127, 8]:
+                if len(password) > 0:
+                    password = password[:-1]
+                    win.delch(0, len(password))
+                    win.move(0, len(password))
+            elif 32 <= ch <= 126:
+                if len(password) < 30:
+                    password += chr(ch)
+                    win.addch(0, len(password) - 1, '*')
+
+def get_logo_lines():
     ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
     compressed_data = base64.b64decode(ascii_art_base64)
     with gzip.GzipFile(fileobj=BytesIO(compressed_data)) as f:
-        ascii_art_lines = f.read().decode('utf-8').splitlines()
+        return f.read().decode('utf-8').splitlines()
 
-    y_start = (height - len(ascii_art_lines)) // 2
+def show_logo(stdscr):
+    stdscr.clear()
+    logo_lines = get_logo_lines()
+    height, width = stdscr.getmaxyx()
+    y_start = (height - len(logo_lines)) // 2
     x = (width - 18) // 2
-    for i, line in enumerate(ascii_art_lines):
-        stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
-    stdscr.refresh()
-    stdscr.getch()
 
-    time.sleep(2)
+    # Scramble effect before revealing
+    temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
+    for _ in range(15):
+        for i, row in enumerate(temp_lines):
+            line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
+            stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_GOLD))
+        stdscr.refresh()
+        curses.napms(50)
+
+    # Final logo render
+    for i, line in enumerate(logo_lines):
+        stdscr.addstr(y_start + i, x, line, curses.color_pair(COLOR_PAIR_GOLD))
+    stdscr.refresh()
+    curses.napms(400)
+
+def fade_logo(stdscr):
+    logo_lines = get_logo_lines()
+    height, width = stdscr.getmaxyx()
+    y_start = (height - len(logo_lines)) // 2
+    x = (width - 18) // 2
+    yellows = [220, 178, 136, 100, 58, 236]
+    for idx, color in enumerate(yellows):
+        curses.init_pair(30 + idx, color, -1)
+        for i, line in enumerate(logo_lines):
+            stdscr.addstr(y_start + i, x, line, curses.color_pair(30 + idx) | curses.A_DIM)
+        stdscr.refresh()
+        curses.napms(100)
+        stdscr.clear()
+
+def shake_logo(stdscr):
+    logo_lines = get_logo_lines()
+    height, width = stdscr.getmaxyx()
+    y_start = (height - len(logo_lines)) // 2
+    x_center = (width - 18) // 2
+    for shake in [-1, 1, -1, 1, 0]:
+        for i, line in enumerate(logo_lines):
+            stdscr.addstr(y_start + i, x_center, " " * (len(line)+1))
+        stdscr.refresh()
+        for i, line in enumerate(logo_lines):
+            stdscr.addstr(y_start + i, x_center + shake, line, curses.color_pair(COLOR_PAIR_GOLD))
+        stdscr.refresh()
+        curses.napms(50)
 
 def main(stdscr):
     curses.curs_set(0)
@@ -741,11 +753,13 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
+    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
+    curses.init_pair(COLOR_PAIR_GOLD, 220, -1)
 
-    show_intro(stdscr)
+    show_logo(stdscr)
 
     password = ""
-    if keystore_has_password(KEYSTORE_PATH):
+    if not check_password(KEYSTORE_PATH, ""):
         password = prompt_password(stdscr)
 
     try:
@@ -809,12 +823,12 @@ def main(stdscr):
                 selected += 1
             elif active_panel == 1:
                 detail_scroll += 1
-        elif key == ord('t'):  # Home or Fn+Up
+        elif key == ord('t'):  # Go to top
             if active_panel == LEFT_PANEL:
                 selected = 0
             else:
                 detail_scroll = 0
-        elif key == ord('b'):  # End or Fn+Down
+        elif key == ord('b'):  # Go to bottom
             if active_panel == LEFT_PANEL:
                 selected = len(entries) - 1
             else:
@@ -943,7 +957,6 @@ def main(stdscr):
             if selected_option == 0:
                 shutil.copyfile(KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH)
                 has_unsaved_changes = check_unsaved_changes()
-                # Saving animation
                 confirm_win.addstr(5, 2, "Saving:")
                 for i in range(30):
                     confirm_win.addstr(5, 10 + i, "█")
