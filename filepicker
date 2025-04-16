@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+import os
+import curses
+
+COLOR_PAIR_SELECTED = 1
+
+WINDOW_HEIGHT = 20
+WINDOW_WIDTH = 70
+
+
+def file_picker(stdscr, start_path="."):
+    curses.curs_set(0)
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
+
+    current_path = os.path.abspath(start_path)
+    selected_index = 0
+    scroll_offset = 0
+
+    while True:
+        stdscr.clear()
+        height, width = stdscr.getmaxyx()
+
+        # Create centered window
+        start_y = (height - WINDOW_HEIGHT) // 2
+        start_x = (width - WINDOW_WIDTH) // 2
+        win = curses.newwin(WINDOW_HEIGHT, WINDOW_WIDTH, start_y, start_x)
+        win.keypad(True)
+        win.box()
+
+        try:
+            entries = os.listdir(current_path)
+            entries.sort()
+            entries = [".."] + entries  # Add parent directory
+        except PermissionError:
+            entries = [".."]
+
+        visible_height = WINDOW_HEIGHT - 2
+        visible_entries = entries[scroll_offset:scroll_offset + visible_height - 1]
+
+        if selected_index >= len(entries):
+            selected_index = len(entries) - 1
+
+        win.addstr(0, 2, f" Select a file: {current_path} "[:WINDOW_WIDTH - 4])
+        for idx, entry in enumerate(visible_entries):
+            actual_index = scroll_offset + idx
+            entry_path = os.path.join(current_path, entries[actual_index])
+            is_selected = actual_index == selected_index
+            attr = curses.color_pair(COLOR_PAIR_SELECTED) if is_selected else curses.A_NORMAL
+            label = f"  {entries[actual_index]}/" if os.path.isdir(entry_path) else f"  {entries[actual_index]}"
+            win.addstr(idx + 1, 1, label[:WINDOW_WIDTH - 2], attr)
+
+        key = win.getch()
+
+        if key in [curses.KEY_UP, ord("k")]:
+            if selected_index > 0:
+                selected_index -= 1
+        elif key in [curses.KEY_DOWN, ord("j")]:
+            if selected_index < len(entries) - 1:
+                selected_index += 1
+        elif key in [10, 13]:  # Enter
+            selected_entry = entries[selected_index]
+            full_path = os.path.join(current_path, selected_entry)
+            if os.path.isdir(full_path):
+                current_path = os.path.abspath(full_path)
+                selected_index = 0
+                scroll_offset = 0
+            else:
+                return os.path.abspath(full_path)
+        elif key in [27, ord("q")]:
+            return None
+
+        # Scroll logic
+        if selected_index < scroll_offset:
+            scroll_offset = selected_index
+        elif selected_index >= scroll_offset + (visible_height - 1):
+            scroll_offset = selected_index - (visible_height - 1) + 1
+
+        win.refresh()
+
+
+if __name__ == "__main__":
+    selected_file = curses.wrapper(file_picker)
+    if selected_file:
+        print(f"Selected file: {selected_file}")
+    else:
+        print("No file selected.")
