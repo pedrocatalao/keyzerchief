@@ -20,3 +20,4 @@ This is a terminal tool to manage Java keystores.
 * Set password.
 * Menu options.
 * Open keystore from menu.
+* Enable/disable mouse (to be able to select and copy).
