@@ -10,6 +10,8 @@ import base64
 import gzip
 import random
 from io import BytesIO
+from datetime import datetime
+from datetime import datetime, timezone
 
 # Config from argument
 if len(sys.argv) < 2:
@@ -22,8 +24,8 @@ if not os.path.isfile(ORIGINAL_KEYSTORE_PATH):
     sys.exit(1)
 
 KEYSTORE_COPY_PATH = tempfile.NamedTemporaryFile(delete=False, suffix=".jks").name
-shutil.copyfile(ORIGINAL_KEYSTORE_PATH, KEYSTORE_COPY_PATH)
 KEYSTORE_PATH = KEYSTORE_COPY_PATH
+shutil.copyfile(ORIGINAL_KEYSTORE_PATH, KEYSTORE_COPY_PATH)
 
 # Colors
 COLOR_PAIR_SELECTED = 1
@@ -36,6 +38,7 @@ COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
 COLOR_PAIR_GREEN = 9
 COLOR_PAIR_RED = 10
+COLOR_PAIR_EXPIRED = 11
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -551,12 +554,25 @@ def get_keystore_entries(path, password):
     # Pre-render each entry's details into strings
     for entry in entries:
         detail_lines = []
-        priority = ["Alias name", "Entry type", "Creation date"]
+        priority = ["Alias name", "Entry type", "Creation date", "Valid from"]
         keys = priority + [k for k in entry if k not in priority]
         for key in keys:
             value = entry.get(key, "")
             detail_lines.append((key, value))
         entry["__rendered__"] = detail_lines
+
+        # Detect expiration
+        valid_from = entry.get("Valid from")
+        if valid_from and "until:" in valid_from:
+            try:
+                until_str = valid_from.split("until:")[1].strip()
+                until_str_clean = until_str.replace("WET", "+0000")
+                until_date = datetime.strptime(until_str_clean, "%a %b %d %H:%M:%S %z %Y")
+                entry["__expired__"] = until_date < datetime.now(timezone.utc)
+            except Exception:
+                entry["__expired__"] = False
+        else:
+            entry["__expired__"] = False
 
     return entries
 
@@ -618,9 +634,16 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
         y_pos = 2 + i - scroll_offset
         alias = entries[i].get("Alias name", "<unknown>")
-        attr = curses.color_pair(COLOR_PAIR_SELECTED) if (active_panel == LEFT_PANEL and i == selected) else (
-            curses.color_pair(COLOR_PAIR_ACTIVE) if active_panel == LEFT_PANEL else curses.color_pair(COLOR_PAIR_INACTIVE)
-        )
+        is_expired = entries[i].get("__expired__", False)
+        if active_panel == LEFT_PANEL:
+            if i == selected:
+                attr = curses.color_pair(COLOR_PAIR_SELECTED)
+            elif is_expired:
+                attr = curses.color_pair(COLOR_PAIR_EXPIRED)
+            else:
+                attr = curses.color_pair(COLOR_PAIR_ACTIVE)
+        else:
+            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
         stdscr.move(y_pos, 1)
         stdscr.clrtoeol()
         stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
@@ -806,6 +829,7 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_GREEN, curses.COLOR_GREEN, -1)
     curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED, 203, -1)
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win, False)
@@ -857,11 +881,13 @@ def main(stdscr):
                 if mouse_event & 0x80000:  # Scroll up
                     if active_panel == LEFT_PANEL and selected > 0:
                         selected -= 1
+                        detail_scroll = 0
                     elif active_panel == RIGHT_PANEL and detail_scroll > 0:
                         detail_scroll -= 1
                 elif mouse_event & 0x8000000:  # Scroll down
                     if active_panel == LEFT_PANEL and selected < len(entries) - 1:
                         selected += 1
+                        detail_scroll = 0
                     elif active_panel == RIGHT_PANEL:
                         detail_scroll += 1
             except curses.error:
@@ -870,11 +896,13 @@ def main(stdscr):
         if key == curses.KEY_UP:
             if active_panel == 0 and selected > 0:
                 selected -= 1
+                detail_scroll = 0
             elif active_panel == 1 and detail_scroll > 0:
                 detail_scroll -= 1
         elif key == curses.KEY_DOWN:
             if active_panel == 0 and selected < len(entries) - 1:
                 selected += 1
+                detail_scroll = 0
             elif active_panel == 1:
                 detail_scroll += 1
         elif key == ord('t'):  # Go to top
