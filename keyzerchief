@@ -313,7 +313,7 @@ def prompt_import_pkcs8_form(stdscr):
 def prompt_import_key_type(stdscr):
     height, width = stdscr.getmaxyx()
     win_height = len(KEY_IMPORT_TYPES) + 4
-    win_width = max(len(t) for t in KEY_IMPORT_TYPES) + 10
+    win_width = max(len(t) for t in KEY_IMPORT_TYPES) + 11
     win = curses.newwin(win_height, win_width, (height - win_height) // 2, (width - win_width) // 2)
     win.keypad(True)
     win.box()
@@ -402,14 +402,22 @@ def import_cert_file(stdscr, password):
 
 def import_cert_from_url(stdscr, password):
     url = prompt_url_input(stdscr)
-    stdscr.clear()
-    stdscr.addstr(0, 2, f"Fetching certificate from {url}...", curses.A_BOLD)
-    stdscr.refresh()
+    if not url:
+        return None
+
+    height, width = stdscr.getmaxyx()
+    win_width = 70
+    win_height = 7
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+    popup = curses.newwin(win_height, win_width, start_y, start_x)
+    popup.box()
+    popup.addstr(1, 2, f"Fetching certificate from {url}...")
+    popup.refresh()
 
     try:
-        for prefix in ["https://", "http://", "https:/", "http:/"]:
-            if url.startswith(prefix):
-                url = url[len(prefix):]
+        if url.startswith("https://") or url.startswith("http://"):
+            url = url.split("://", 1)[1]
 
         parts = url.split(":")
         host = parts[0]
@@ -422,7 +430,6 @@ def import_cert_from_url(stdscr, password):
             "-connect", f"{host}:{port}"
         ]
         fetch = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, timeout=5)
-        print(fetch.stdout)
         start = fetch.stdout.find("-----BEGIN CERTIFICATE-----")
         end = fetch.stdout.find("-----END CERTIFICATE-----") + len("-----END CERTIFICATE-----")
         cert = fetch.stdout[start:end]
@@ -433,7 +440,7 @@ def import_cert_from_url(stdscr, password):
         with open(cert_path, "w") as f:
             f.write(cert)
 
-        alias = url.split(':')[0]
+        alias = host
         import_cmd = [
             "keytool", "-importcert",
             "-alias", alias,
@@ -443,24 +450,27 @@ def import_cert_from_url(stdscr, password):
             "-noprompt"
         ]
         result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        stdscr.clear()
+        popup.clear()
+        popup.box()
         if result.returncode == 0:
-            stdscr.addstr(2, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
-            return alias
+            popup.addstr(2, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
         else:
-            stdscr.addstr(2, 2, "Import failed:", curses.A_BOLD)
-            stdscr.addstr(4, 2, result.stderr.strip())
-
+            popup.addstr(2, 2, "Import failed:", curses.A_BOLD)
+            popup.addstr(3, 2, result.stderr.strip()[:win_width - 4])
     except Exception as e:
-        stdscr.addstr(2, 2, f"Error: {str(e)}", curses.A_BOLD)
+        popup.clear()
+        popup.box()
+        popup.addstr(2, 2, f"Error: {str(e)}", curses.A_BOLD)
 
-    stdscr.addstr(4, 2, "Press any key to continue.")
-    stdscr.refresh()
-    stdscr.getch()
-
+    popup.addstr(win_height - 2, 2, "Press any key to continue.")
+    popup.refresh()
+    popup.getch()
+    return alias if 'alias' in locals() else None
 
 def prompt_url_input(stdscr):
-    curses.echo()
+    curses.curs_set(1)
+    curses.noecho()
+
     height, width = stdscr.getmaxyx()
     win_width = 60
     win_height = 7
@@ -468,33 +478,35 @@ def prompt_url_input(stdscr):
     start_x = (width - win_width) // 2
 
     win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
     win.box()
     win.addstr(1, 2, "Import SSL Certificate from Website")
     win.addstr(3, 2, "Hostname:Port (e.g. example.com:443):")
     win.refresh()
 
     input_win = curses.newwin(1, win_width - 4, start_y + 4, start_x + 2)
-    curses.curs_set(1)
     input_win.keypad(True)
+
     value = ""
     while True:
-        input_win.clear()
         input_win.addstr(0, 0, value)
         input_win.refresh()
-        ch = input_win.getch()
-        if ch in [10, 13]:
+        ch = input_win.getch() 
+        if ch in [10, 13]:  # Enter
             break
-        elif ch in [27]:
-            return None
+        elif ch == 27:  # ESC
+            value = ""
+            break
         elif ch in [curses.KEY_BACKSPACE, 127, 8]:
             value = value[:-1]
+            input_win.addch(0, len(value), ' ')
+            input_win.move(0, len(value))
         elif 32 <= ch <= 126:
             if len(value) < win_width - 6:
                 value += chr(ch)
 
     curses.curs_set(0)
-    curses.noecho()
-    return value.strip()
+    return value.strip() if value else None
 
 def check_password(keystore_path, password):
     try:
@@ -555,19 +567,30 @@ def find_entry_index_by_alias(entries, alias):
     return 0
 
 def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes):
-    stdscr.clear()
     height, width = stdscr.getmaxyx()
     panel_width = width // 2
     max_detail_width = width - panel_width - 5
     visible_height = height - 4
 
-    # Menu bar
+    # Fix scroll offset if needed
+    if selected < scroll_offset:
+        scroll_offset = selected
+    elif selected >= scroll_offset + visible_height:
+        scroll_offset = selected - visible_height + 1
+
+    # Redraw header (menu)
     stdscr.attron(curses.color_pair(COLOR_PAIR_MENU))
     stdscr.addstr(0, 0, " " * width)
     stdscr.addstr(0, 1, " Left      File      Options      Right ")
     stdscr.attroff(curses.color_pair(COLOR_PAIR_MENU))
 
-    # Left panel box
+    # Draw static borders
+    for y in range(2, height - 2):
+        stdscr.addch(y, 0, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width, curses.ACS_VLINE)
+        stdscr.addch(y, width - 1, curses.ACS_VLINE)
+
     stdscr.addch(1, 0, curses.ACS_ULCORNER)
     stdscr.addch(1, panel_width - 1, curses.ACS_URCORNER)
     stdscr.hline(1, 1, curses.ACS_HLINE, panel_width - 2)
@@ -575,18 +598,14 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     stdscr.addstr("t", curses.color_pair(COLOR_PAIR_DARK))
     stdscr.addstr("op├")
     stdscr.addstr(1, 3, f" Keystore: {ORIGINAL_KEYSTORE_PATH} ", curses.color_pair(COLOR_PAIR_HEADER))
+
     stdscr.addch(height - 2, 0, curses.ACS_LLCORNER)
     stdscr.addch(height - 2, panel_width - 1, curses.ACS_LRCORNER)
     stdscr.hline(height - 2, 1, curses.ACS_HLINE, panel_width - 2)
-    for y in range(2, height - 2):
-        stdscr.addch(y, 0, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
-
     stdscr.addstr(height - 2, panel_width - 7, "─┤")
     stdscr.addstr("b", curses.color_pair(COLOR_PAIR_DARK))
     stdscr.addstr("ot├")
 
-    # Right panel box
     stdscr.addch(1, panel_width, curses.ACS_ULCORNER)
     stdscr.addch(1, width - 1, curses.ACS_URCORNER)
     stdscr.hline(1, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
@@ -594,68 +613,71 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     stdscr.addch(height - 2, panel_width, curses.ACS_LLCORNER)
     stdscr.addch(height - 2, width - 1, curses.ACS_LRCORNER)
     stdscr.hline(height - 2, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
-    for y in range(2, height - 2):
-        stdscr.addch(y, panel_width, curses.ACS_VLINE)
-        stdscr.addch(y, width - 1, curses.ACS_VLINE)
 
-    stdscr.attroff(curses.color_pair(COLOR_PAIR_HEADER))
-
-    if selected < scroll_offset:
-        scroll_offset = selected
-    elif selected >= scroll_offset + visible_height:
-        scroll_offset = selected - visible_height + 1
-
+    # Left panel entries
     for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
-        entry = entries[i]
-        alias = entry.get("Alias name", "<unknown>")
         y_pos = 2 + i - scroll_offset
-        if y_pos >= height - 2:
-            break
-        if active_panel == LEFT_PANEL:
-            attr = curses.color_pair(COLOR_PAIR_SELECTED) if i == selected else curses.color_pair(COLOR_PAIR_ACTIVE)
-        else:
-            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
-        stdscr.addstr(y_pos, 2, alias[:panel_width - 3], attr)
+        alias = entries[i].get("Alias name", "<unknown>")
+        attr = curses.color_pair(COLOR_PAIR_SELECTED) if (active_panel == LEFT_PANEL and i == selected) else (
+            curses.color_pair(COLOR_PAIR_ACTIVE) if active_panel == LEFT_PANEL else curses.color_pair(COLOR_PAIR_INACTIVE)
+        )
+        stdscr.move(y_pos, 1)
+        stdscr.clrtoeol()
+        stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
 
-    # Right panel content
-    stdscr.attroff(curses.color_pair(COLOR_PAIR_HEADER))
+    # Clear remaining left panel rows
+    for y in range(2 + len(entries) - scroll_offset, height - 2):
+        stdscr.move(y, 1)
+        stdscr.clrtoeol()
 
+    # Right panel details
     detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
     line_num = 2
     for key, value in detail_lines:
-        lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
         if line_num >= height - 2:
             break
+        lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
         attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
+
+        stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
         stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
         line_num += 1
         for l in lines:
             if line_num >= height - 2:
                 break
+            stdscr.addstr(line_num, panel_width + 4, " " * (width - panel_width - 5))
             stdscr.addstr(line_num, panel_width + 4, l, attr)
             line_num += 1
 
-    # Draw Footer
+    # Clear remaining right panel rows
+    for y in range(line_num, height - 2):
+        stdscr.addstr(y, panel_width + 2, " " * (width - panel_width - 3))
+
+    # Restore  vertical lines that may have been cleared
+    for y in range(2, height - 2):
+        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width * 2, curses.ACS_VLINE)
+
+    # Footer
     footer_options = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
     spacing = width // len(footer_options)
     for i, item in enumerate(footer_options):
         label = item[2:]
         prefix = item[:2]
-        if "Save" in label and has_unsaved_changes:
-            attr = curses.color_pair(COLOR_PAIR_WARN)
-        else:
-            attr = curses.color_pair(COLOR_PAIR_FKEYS)
+        attr = curses.color_pair(COLOR_PAIR_WARN) if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_FKEYS)
         stdscr.addstr(height - 1, i * spacing, prefix, attr)
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
+    stdscr.move(0, 0)
     stdscr.refresh()
+    return scroll_offset
 
 def prompt_password(win):
     win_y, win_x = win.getbegyx()
-    curses.curs_set(1)
     while True:
         curses.noecho()
-        win.addstr(4, 26, "Keyzer Chief 0.9b", curses.color_pair(COLOR_PAIR_HEADER))
+        win.addstr(4, 26, "Keyzer Chief 0.9b", curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
         win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_HEADER))
         prompt = "Keystore password:"
         for i in range(len(prompt)):
@@ -663,10 +685,11 @@ def prompt_password(win):
             win.refresh()
             curses.napms(30)
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
-        keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
+        keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
         keypad_win.keypad(True)
         keypad_win.move(0,0)
         win.refresh()
+        curses.curs_set(1)
         password = ""
 
         while True:
@@ -677,28 +700,28 @@ def prompt_password(win):
                     password = ""
                     shake_logo(win)
                     keypad_win.clear()
-                    keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_SELECTED))
+                    keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
                     keypad_win.move(0,0)
                     curses.curs_set(1)
                 else:
-                    fade_logo(win, [82, 46, 40, 34, 28, 22, 236, 234])
+                    fade_logo(win)
                     curses.curs_set(0)
                     return password
             elif ch in [27]:  # ESC
                 curses.curs_set(0)
-                fade_logo(win, [220, 178, 136, 100, 58, 236, 234])
+                fade_logo(win)
                 exit(1)
             elif ch in [curses.KEY_BACKSPACE, 127, 8]:
                 if len(password) > 0:
                     password = password[:-1]
-                    keypad_win.addch(0, len(password), ' ', curses.color_pair(COLOR_PAIR_SELECTED))
+                    keypad_win.addch(0, len(password), ' ', curses.color_pair(COLOR_PAIR_FKEYS))
                     keypad_win.move(0, len(password))
             elif 32 <= ch <= 126:
                 if len(password)+1 > 24:
                     break
                 if len(password) < 30:
                     password += chr(ch)
-                    keypad_win.addch(0, len(password) - 1, '*', curses.color_pair(COLOR_PAIR_SELECTED))
+                    keypad_win.addch(0, len(password) - 1, '*', curses.color_pair(COLOR_PAIR_FKEYS))
 
 def get_logo_lines():
     ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
@@ -713,10 +736,11 @@ def intro_window(stdscr):
     box_y = (height - box_height) // 2
     box_x = (width - box_width) // 2
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
+    intro_win.attron(curses.color_pair(COLOR_PAIR_HEADER))
     intro_win.border()
-    esc_label = "─┤Esc➜quit├"
+    esc_label = "─┤Esc├─"
     label_x = box_width - len(esc_label) - 1
-    intro_win.addstr(box_height - 1, label_x, esc_label)
+    intro_win.addstr(box_height - 1, label_x, esc_label, curses.color_pair(COLOR_PAIR_HEADER))
     return intro_win
 
 def show_logo(win, final):
@@ -727,10 +751,11 @@ def show_logo(win, final):
     # Scramble effect before revealing
     if not final:
         temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
-        for _ in range(15):
+        for idx, color in enumerate([234, 236, 58, 100, 136, 178, 220, 11, 11, 11, 11, 11, 11]):
+            curses.init_pair(30 + idx, color, -1)
             for i, row in enumerate(temp_lines):
-                line = ''.join(random.choice('◣ ◥ ◤ ◢ ◂ ▴ ▾ ▸ ') if ch != ' ' else ' ' for ch in row)
-                win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
+                line = ''.join(random.choice('▓ ▒ ░ ▀') if ch != ' ' else ' ' for ch in row)
+                win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
             win.refresh()
             curses.napms(50)
 
@@ -740,11 +765,11 @@ def show_logo(win, final):
     win.refresh()
     curses.napms(400)
 
-def fade_logo(win, fading_colors):
+def fade_logo(win):
     logo_x = 4
     logo_y = 2
     logo_lines = get_logo_lines()
-    for idx, color in enumerate(fading_colors):
+    for idx, color in enumerate([220, 178, 136, 100, 58, 236, 234]):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
             win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
