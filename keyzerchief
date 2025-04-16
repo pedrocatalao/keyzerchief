@@ -663,7 +663,10 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
 
         stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
-        stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
+        if key == "Valid from" and entries[selected].get("__expired__") == True:
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | curses.color_pair(COLOR_PAIR_EXPIRED))
+        else:
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
         line_num += 1
         for l in lines:
             if line_num >= height - 2:
