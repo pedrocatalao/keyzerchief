@@ -740,8 +740,8 @@ def save_changes(has_unsaved_changes):
     confirm_win.addstr(0, max(2, (confirm_width - len(title)) // 2), title[:confirm_width - 4], curses.color_pair(COLOR_PAIR_MENU))
     confirm_win.addstr(2, 2, "Overwrite the original keystore?")
 
-    selected_option = 0
     options = ["Yes", "No"]
+    selected_option = 1
 
     while True:
         for i, label in enumerate(options):
@@ -1222,5 +1222,9 @@ def main(stdscr):
         elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
             has_unsaved_changes = save_changes(has_unsaved_changes)
             break
+
+        if has_unsaved_changes:
+            if selected == len(entries) - 1:
+                scroll_offset = max(0, len(entries) - panel_height)
 
 curses.wrapper(main)
