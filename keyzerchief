@@ -37,7 +37,7 @@ COLOR_PAIR_ACTIVE = 5
 COLOR_PAIR_INACTIVE = 6
 COLOR_PAIR_WARN = 7
 COLOR_PAIR_DARK = 8
-COLOR_PAIR_GREEN = 9
+COLOR_PAIR_NAVY = 9
 COLOR_PAIR_RED = 10
 COLOR_PAIR_EXPIRED = 11
 COLOR_PAIR_DARKER = 12
@@ -63,7 +63,7 @@ def file_picker(stdscr, start_path="."):
         start_x = (width - win_width) // 2
         win = curses.newwin(win_height, win_width, start_y, start_x)
         win.keypad(True)
-        popup_box(win)
+        popup_box(win, f"Select a file: {current_path}")
 
         try:
             entries = os.listdir(current_path)
@@ -78,8 +78,6 @@ def file_picker(stdscr, start_path="."):
         if selected_index >= len(entries):
             selected_index = len(entries) - 1
 
-        title = f" Select a file: {current_path} "
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
         win.addstr(1, 1, f" {'Name':<35} {'Size':>9} {'Modified':>20}", curses.A_BOLD)
 
         for idx, entry in enumerate(visible_entries):
@@ -143,7 +141,6 @@ def file_picker(stdscr, start_path="."):
         win.refresh()
 
 def prompt_import_pkcs12_form(stdscr):
-    title = " Import PKCS #12 Key Pair "
     height, width = stdscr.getmaxyx()
     win_width = 60
     win_height = 10
@@ -161,9 +158,7 @@ def prompt_import_pkcs12_form(stdscr):
     in_buttons = False
 
     while True:
-        win.attron(curses.color_pair(COLOR_PAIR_EXPIRED))
-        popup_box(win)
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+        popup_box(win, "Import PKCS #12 Key Pair")
         for i, label in enumerate(labels):
             win.addstr(3 + i, 2, label)
             attr = curses.A_REVERSE if (not in_buttons and i == current) else curses.A_NORMAL
@@ -296,7 +291,6 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
     stdscr.getch()
 
 def prompt_import_pkcs8_form(stdscr):
-    title = " Import PKCS #8 Key Pair "
     height, width = stdscr.getmaxyx()
     win_width = 70
     win_height = 13
@@ -314,8 +308,7 @@ def prompt_import_pkcs8_form(stdscr):
     in_buttons = False
 
     while True:
-        popup_box(win)
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+        popup_box(win, "Import PKCS #8 Key Pair")
         win.addstr(3, 2, "Encrypted Private Key:")
         yes_attr = curses.color_pair(COLOR_PAIR_MENU) if encrypted else curses.A_NORMAL
         no_attr = curses.color_pair(COLOR_PAIR_MENU) if not encrypted else curses.A_NORMAL
@@ -425,18 +418,17 @@ def prompt_import_pkcs8_form(stdscr):
 def prompt_import_key_type(stdscr):
     key_types = ["PKCS #12", "PKCS #8", "PVK", "OpenSSL"]
     height, width = stdscr.getmaxyx()
-    win_height = len(key_types) + 5
+    win_height = len(key_types) + 4
     win_width = max(len(t) for t in key_types) + 13
     win = curses.newwin(win_height, win_width, (height - win_height) // 2, (width - win_width) // 2)
     win.keypad(True)
-    popup_box(win)
-    win.addstr(1, 3, "Import Key Pair", curses.color_pair(COLOR_PAIR_HEADER))
+    popup_box(win, "Import Key Pair")
     selected = 0
 
     while True:
         for i, option in enumerate(key_types):
             mode = curses.A_REVERSE if i == selected else curses.A_NORMAL
-            win.addstr(3 + i, 4, option.ljust(win_width - 8), mode)
+            win.addstr(2 + i, 4, option.ljust(win_width - 8), mode)
         win.refresh()
         key = win.getch()
         if key == curses.KEY_UP and selected > 0:
@@ -449,7 +441,6 @@ def prompt_import_key_type(stdscr):
             return None
 
 def import_cert_file(stdscr, password):
-    title = " Import Certificate File "
     height, width = stdscr.getmaxyx()
     win_width = 60
     win_height = 9
@@ -464,8 +455,7 @@ def import_cert_file(stdscr, password):
     in_buttons = False
 
     while True:
-        popup_box(win)
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+        popup_box(win, "Import Certificate File")
         win.addstr(3, 2, label)
         attr = curses.A_REVERSE if not in_buttons else curses.A_NORMAL
         win.addstr(3, 20, value[-38:].ljust(38), attr)
@@ -514,8 +504,8 @@ def import_cert_file(stdscr, password):
                         "-file", cert_file,
                         "-noprompt"
                     ]
-                    win.clear()
-                    popup_box(win)
+                    win.erase()
+                    popup_box(win, "Import Certificate File")
                     win.addstr(2, 2, f"Importing {cert_file}...", curses.A_BOLD)
                     win.refresh()
                     result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -544,15 +534,13 @@ def import_cert_from_url(stdscr, password):
     if not url:
         return None
 
-    title = "Import SSL Certificate from URL"
     height, width = stdscr.getmaxyx()
     win_width = 60
     win_height = 9
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
     win = curses.newwin(win_height, win_width, start_y, start_x)
-    popup_box(win)
-    win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+    popup_box(win, "Import SSL Certificate from URL")
     win.addstr(2, 2, f"Fetching certificate from {url}...")
     win.refresh()
 
@@ -592,16 +580,15 @@ def import_cert_from_url(stdscr, password):
         ]
         result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         win.erase()
-        popup_box(win)
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+        popup_box(win, "Import SSL Certificate from URL")
         if result.returncode == 0:
             win.addstr(2, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
         else:
             win.addstr(2, 2, "Import failed:", curses.A_BOLD)
             win.addstr(3, 2, result.stderr.strip()[:win_width - 4])
     except Exception as e:
-        win.clear()
-        popup_box(win)
+        popup_box(win, "Import SSL Certificate from URL")
+        win.erase()
         win.addstr(2, 2, f"Error: {str(e)}", curses.A_BOLD)
 
     win.addstr(win_height - 4, 2, "Press any key to continue.")
@@ -610,7 +597,6 @@ def import_cert_from_url(stdscr, password):
     return alias if 'alias' in locals() else None
 
 def prompt_url_input(stdscr):
-    title = "Import SSL Certificate from URL"
     curses.noecho()
     curses.curs_set(0)
     height, width = stdscr.getmaxyx()
@@ -620,15 +606,13 @@ def prompt_url_input(stdscr):
     start_x = (width - win_width) // 2
 
     win = curses.newwin(win_height, win_width, start_y, start_x)
-    popup_box(win)
     win.keypad(True)
     value = ""
     selected_button = 0
     in_buttons = False
 
     while True:
-        popup_box(win)
-        win.addstr(0, max(2, (win_width - len(title)) // 2), title[:win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+        popup_box(win, "Import SSL Certificate from URL")
         win.addstr(3, 2, "Hostname:Port (e.g. example.com:443):")
         attr = curses.A_REVERSE if not in_buttons else curses.A_NORMAL
         win.addstr(4, 2, value[-40:].ljust(win_width-4), attr)
@@ -671,14 +655,12 @@ def prompt_url_input(stdscr):
             return None
 
 def delete_entry(password, alias):
-    title = "Delete entry?"
     confirm_height, confirm_width = 8, 60
     confirm_y = (curses.LINES - confirm_height) // 2
     confirm_x = (curses.COLS - confirm_width) // 2
     confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
     confirm_win.keypad(True)
-    popup_box(confirm_win)
-    confirm_win.addstr(0, max(2, (confirm_width - len(title)) // 2), title[:confirm_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+    popup_box(confirm_win, "Delete entry?")
     confirm_win.addstr(2, 2, f"Entry will be deleted:")
     confirm_win.addstr(3, 2, f"{alias} ", curses.A_BOLD)
     options = ["Yes", "No"]
@@ -730,19 +712,15 @@ def save_changes(has_unsaved_changes):
     if not has_unsaved_changes:
         return False
 
-    title = "Save changes?"
     confirm_height, confirm_width = 7, 50
     confirm_y = (curses.LINES - confirm_height) // 2
     confirm_x = (curses.COLS - confirm_width) // 2
     confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
     confirm_win.keypad(True)
-    popup_box(confirm_win)
-    confirm_win.addstr(0, max(2, (confirm_width - len(title)) // 2), title[:confirm_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+    popup_box(confirm_win, "Save changes?")
     confirm_win.addstr(2, 2, "Overwrite the original keystore?")
-
     options = ["Yes", "No"]
     selected_option = 1
-
     while True:
         for i, label in enumerate(options):
             attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
@@ -943,7 +921,7 @@ def prompt_password(win):
             win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_INACTIVE) | curses.A_BOLD)
             win.refresh()
             curses.napms(30)
-        win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_EXPIRED))
+        win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_NAVY) | curses.A_ITALIC)
         win.addstr(14, 22, "Keystore password:")
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
         keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
@@ -965,8 +943,8 @@ def prompt_password(win):
                     keypad_win.move(0,0)
                     curses.curs_set(1)
                 else:
-                    fade_logo(win)
                     curses.curs_set(0)
+                    fade_logo(win)
                     return password
             elif ch in [27]:  # ESC
                 curses.curs_set(0)
@@ -990,12 +968,13 @@ def get_logo_lines():
     with gzip.GzipFile(fileobj=BytesIO(compressed_data)) as f:
         return f.read().decode('utf-8').splitlines()
 
-def popup_box(win):
+def popup_box(win, title):
     esc_label = "─┤esc├─"
     height, width = win.getmaxyx()
     label_x = width - len(esc_label) - 1
     win.attron(curses.color_pair(COLOR_PAIR_DARKER))
     win.box()
+    win.addstr(0, max(2, (width - len(title)) // 2), title[:width - 4], curses.color_pair(COLOR_PAIR_MENU))
     win.addstr(height - 1, label_x, esc_label)
     win.attroff(curses.color_pair(COLOR_PAIR_DARKER))
     win.addstr(height - 1, label_x + 2, "esc", curses.color_pair(COLOR_PAIR_HEADER))
@@ -1007,7 +986,7 @@ def intro_window(stdscr):
     box_y = (height - box_height) // 2
     box_x = (width - box_width) // 2
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
-    popup_box(intro_win)
+    popup_box(intro_win, "")
     return intro_win
 
 def show_logo(win, final):
@@ -1071,7 +1050,7 @@ def main(stdscr):
     curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
-    curses.init_pair(COLOR_PAIR_GREEN, curses.COLOR_GREEN, -1)
+    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
     curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED, 203, -1)
     curses.init_pair(COLOR_PAIR_DARKER, 239, -1)
