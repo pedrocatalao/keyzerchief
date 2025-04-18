@@ -72,20 +72,20 @@ def init_curses():
 def file_picker(stdscr, start_path="."):
     win_height = 20
     win_width = 70
-    curses.curs_set(0)
+    height, width = stdscr.getmaxyx()
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
     current_path = os.path.abspath(start_path)
     selected_index = 0
     scroll_offset = 0
 
-    while True:
-        stdscr.clear()
-        height, width = stdscr.getmaxyx()
+    curses.curs_set(0)
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
 
-        # Create centered window
-        start_y = (height - win_height) // 2
-        start_x = (width - win_width) // 2
-        win = curses.newwin(win_height, win_width, start_y, start_x)
-        win.keypad(True)
+    while True:
+        win.erase()
         popup_box(win, f"Select a file: {current_path}")
 
         try:
@@ -150,7 +150,7 @@ def file_picker(stdscr, start_path="."):
                 win.clear()
                 win.refresh()
                 return os.path.abspath(full_path)
-        elif key in [27, ord("q")]:
+        elif key in [27]:
             win.clear()
             win.refresh()
             return None
@@ -159,9 +159,6 @@ def file_picker(stdscr, start_path="."):
             scroll_offset = selected_index
         elif selected_index >= scroll_offset + visible_height:
             scroll_offset = selected_index - visible_height + 1
-
-        win.erase()
-        win.refresh()
 
 def prompt_import_pkcs12_form(stdscr):
     height, width = stdscr.getmaxyx()
@@ -1091,7 +1088,6 @@ def main(stdscr):
 
     while True:
         draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes)
-        #threading.Thread(target=draw_footer(stdscr, has_unsaved_changes, highlight_footer_key), daemon=True).start()
         draw_footer(stdscr, has_unsaved_changes, footer_options)
         key = stdscr.getch()
         height, width = stdscr.getmaxyx()
