@@ -10,7 +10,7 @@ import base64
 import gzip
 import random
 import time
-import threading
+import signal
 from io import BytesIO
 from datetime import datetime
 from datetime import datetime, timezone
@@ -50,6 +50,11 @@ COLOR_PAIR_DARKER = 12
 # Mouse support constants
 LEFT_PANEL = 0
 RIGHT_PANEL = 1
+
+# MENU AND FOOTER
+MENU_SPACING = 3
+MENU_ITEMS = ["Left", "File", "Options", "Right"]
+FOOTER_OPTIONS = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
 
 def init_curses():
     curses.curs_set(0)
@@ -814,112 +819,98 @@ def find_entry_index_by_alias(entries, alias):
             return i
     return 0
 
-def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes):
-    height, width = stdscr.getmaxyx()
-    panel_width = width // 2
-    max_detail_width = width - panel_width - 5
-    visible_height = height - 4
+def draw_menu_bar(active_menu, width):
+    bar_win = curses.newwin(1, width, 0, 0)
+    bar_win.bkgd(' ', curses.color_pair(COLOR_PAIR_MENU))
+    x = 1
+    for i, item in enumerate(MENU_ITEMS):
+        if i == active_menu:
+            bar_win.attron(curses.A_REVERSE)
+        bar_win.addstr(0, x + (i * MENU_SPACING), f" {item} ")
+        bar_win.attroff(curses.A_REVERSE)
+        x += len(item) + 2
+    bar_win.refresh()
 
-    # Fix scroll offset if needed
-    if selected < scroll_offset:
-        scroll_offset = selected
-    elif selected >= scroll_offset + visible_height:
-        scroll_offset = selected - visible_height + 1
+def menu_modal(stdscr, redraw_main_ui=None):
+    submenus = {
+        "Left": ["Search", "Filter"],
+        "File": ["Open keystore", "Quit"],
+        "Options": ["Enable/Disable mouse"],
+        "Right": ["Search content"]
+    }
 
-    # Redraw header (menu)
-    stdscr.attron(curses.color_pair(COLOR_PAIR_MENU))
-    stdscr.addstr(0, 0, " " * width)
-    stdscr.addstr(0, 1, " Left      File      Options      Right ")
-    stdscr.attroff(curses.color_pair(COLOR_PAIR_MENU))
+    active_menu = 0  # Start focus on "Left"
+    selected_index = None
+    _, width = stdscr.getmaxyx()
 
-    # Draw static borders
-    for y in range(2, height - 2):
-        stdscr.addch(y, 0, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width, curses.ACS_VLINE)
-        stdscr.addch(y, width - 1, curses.ACS_VLINE)
+    def draw_submenu():
+        items = submenus[MENU_ITEMS[active_menu]]
+        max_width = max(len(item) for item in items) + 4
+        box_height = len(items) + 2
+        start_x = 1 + sum(len(f" {MENU_ITEMS[i]} ") + MENU_SPACING for i in range(active_menu))
+        start_y = 1
 
-    stdscr.addch(1, 0, curses.ACS_ULCORNER)
-    stdscr.addch(1, panel_width - 1, curses.ACS_URCORNER)
-    stdscr.hline(1, 1, curses.ACS_HLINE, panel_width - 2)
-    stdscr.addstr(1, panel_width - 7, "─┤")
-    stdscr.addstr("t", curses.color_pair(COLOR_PAIR_DARK))
-    stdscr.addstr("op├")
-    stdscr.addstr(1, 3, f" Keystore: {ORIGINAL_KEYSTORE_PATH} ", curses.color_pair(COLOR_PAIR_HEADER))
+        submenu_win = curses.newwin(box_height, max_width, start_y, start_x)
+        submenu_win.bkgd(' ', curses.color_pair(COLOR_PAIR_DARKER))
+        submenu_win.box()
 
-    stdscr.addch(height - 2, 0, curses.ACS_LLCORNER)
-    stdscr.addch(height - 2, panel_width - 1, curses.ACS_LRCORNER)
-    stdscr.hline(height - 2, 1, curses.ACS_HLINE, panel_width - 2)
-    stdscr.addstr(height - 2, panel_width - 7, "─┤")
-    stdscr.addstr("b", curses.color_pair(COLOR_PAIR_DARK))
-    stdscr.addstr("ot├")
+        for idx, label in enumerate(items):
+            attr = curses.color_pair(COLOR_PAIR_MENU) if idx == selected_index else curses.color_pair(COLOR_PAIR_HEADER)
+            submenu_win.addstr(1 + idx, 2, label.ljust(max_width - 4), attr)
 
-    stdscr.addch(1, panel_width, curses.ACS_ULCORNER)
-    stdscr.addch(1, width - 1, curses.ACS_URCORNER)
-    stdscr.hline(1, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
-    stdscr.addstr(1, panel_width + 3, " Details ", curses.color_pair(COLOR_PAIR_HEADER))
-    stdscr.addch(height - 2, panel_width, curses.ACS_LLCORNER)
-    stdscr.addch(height - 2, width - 1, curses.ACS_LRCORNER)
-    stdscr.hline(height - 2, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
+        submenu_win.refresh()
+        return submenu_win
 
-    # Left panel entries
-    for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
-        y_pos = 2 + i - scroll_offset
-        alias = entries[i].get("Alias name", "<unknown>")
-        is_expired = entries[i].get("__expired__", False)
-        if active_panel == LEFT_PANEL:
-            if i == selected:
-                attr = curses.color_pair(COLOR_PAIR_SELECTED)
-            elif is_expired:
-                attr = curses.color_pair(COLOR_PAIR_EXPIRED)
+    submenu_win = draw_submenu()
+    submenu_win = None
+
+    while True:
+        key = stdscr.getch()
+
+        if key == curses.KEY_LEFT:
+            if submenu_win:
+                submenu_win.clear()
+                submenu_win.refresh()
+                submenu_win = None
+                selected_index = None
+            active_menu = (active_menu - 1) % len(MENU_ITEMS)
+            if redraw_main_ui:
+                redraw_main_ui()
+            draw_menu_bar(active_menu, width)
+            draw_submenu()
+
+        elif key == curses.KEY_RIGHT:
+            if submenu_win:
+                submenu_win.clear()
+                submenu_win.refresh()
+                submenu_win = None
+                selected_index = None
+            active_menu = (active_menu + 1) % len(MENU_ITEMS)
+            if redraw_main_ui:
+                redraw_main_ui()
+            draw_menu_bar(active_menu, width)
+            draw_submenu()
+
+        elif key in (curses.KEY_DOWN):
+            if selected_index is None:
+                selected_index = 0
             else:
-                attr = curses.color_pair(COLOR_PAIR_ACTIVE)
-        else:
-            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
-        stdscr.move(y_pos, 1)
-        stdscr.clrtoeol()
-        stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
+                selected_index = (selected_index + 1) % len(submenus[MENU_ITEMS[active_menu]])
+            submenu_win = draw_submenu()
 
-    # Clear remaining left panel rows
-    for y in range(2 + len(entries) - scroll_offset, height - 2):
-        stdscr.move(y, 1)
-        stdscr.clrtoeol()
+        elif key == curses.KEY_UP and submenu_win:
+            selected_index = (selected_index - 1) % len(submenus[MENU_ITEMS[active_menu]])
+            submenu_win = draw_submenu()
 
-    # Right panel details
-    detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
-    line_num = 2
-    for key, value in detail_lines:
-        if line_num >= height - 2:
-            break
-        lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
-        attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
+        elif key == curses.KEY_DOWN and submenu_win:
+            selected_index = (selected_index + 1) % len(submenus[MENU_ITEMS[active_menu]])
+            submenu_win = draw_submenu()
 
-        stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
-        if key == "Valid from" and entries[selected].get("__expired__") == True:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | curses.color_pair(COLOR_PAIR_EXPIRED))
-        else:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
-        line_num += 1
-        for l in lines:
-            if line_num >= height - 2:
-                break
-            stdscr.addstr(line_num, panel_width + 4, " " * (width - panel_width - 5))
-            stdscr.addstr(line_num, panel_width + 4, l, attr)
-            line_num += 1
-
-    # Clear remaining right panel rows
-    for y in range(line_num, height - 2):
-        stdscr.addstr(y, panel_width + 2, " " * (width - panel_width - 3))
-
-    # Restore  vertical lines that may have been cleared
-    for y in range(2, height - 2):
-        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width * 2, curses.ACS_VLINE)
-
-    stdscr.move(0, 0)
-    stdscr.refresh()
-    return scroll_offset
+        elif key == 27:  # ESC
+            if submenu_win:
+                submenu_win.clear()
+                submenu_win.refresh()
+            return None, None
 
 def prompt_password(win):
     win_y, win_x = win.getbegyx()
@@ -929,7 +920,7 @@ def prompt_password(win):
         for i in range(len(title)):
             win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_INACTIVE) | curses.A_BOLD)
             win.refresh()
-            curses.napms(30)
+            curses.napms(9)
         win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_NAVY) | curses.A_ITALIC)
         win.addstr(14, 22, "Keystore password:")
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
@@ -1039,29 +1030,130 @@ def shake_logo(win):
         curses.napms(50)
     show_logo(win, True)
 
-def draw_footer(stdscr, has_unsaved_changes, footer_options):
+def draw_footer(stdscr, has_unsaved_changes):
     height, width = stdscr.getmaxyx()
-    spacing = width // len(footer_options)
-    for i, item in enumerate(footer_options):
+    spacing = width // len(FOOTER_OPTIONS)
+    for i, item in enumerate(FOOTER_OPTIONS):
         label = item[2:]
         prefix = item[:2]
         attr_key = curses.color_pair(COLOR_PAIR_SELECTED) if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_FKEYS)
         stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
-def highlight_footer_key(stdscr, key_index, footer_options):
+def highlight_footer_key(stdscr, key_index):
     height, width = stdscr.getmaxyx()
-    spacing = width // len(footer_options)
-    label = footer_options[key_index][2:]
+    spacing = width // len(FOOTER_OPTIONS)
+    label = FOOTER_OPTIONS[key_index][2:]
     stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
     stdscr.refresh()
     time.sleep(0.2) # Keep highlight momentarily
     stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
+def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes):
+    height, width = stdscr.getmaxyx()
+    panel_width = width // 2
+    max_detail_width = width - panel_width - 5
+    visible_height = height - 4
+
+    # Fix scroll offset if needed
+    if selected < scroll_offset:
+        scroll_offset = selected
+    elif selected >= scroll_offset + visible_height:
+        scroll_offset = selected - visible_height + 1
+
+    # Draw static borders
+    for y in range(2, height - 2):
+        stdscr.addch(y, 0, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width, curses.ACS_VLINE)
+        stdscr.addch(y, width - 1, curses.ACS_VLINE)
+
+    stdscr.addch(1, 0, curses.ACS_ULCORNER)
+    stdscr.addch(1, panel_width - 1, curses.ACS_URCORNER)
+    stdscr.hline(1, 1, curses.ACS_HLINE, panel_width - 2)
+    stdscr.addstr(1, panel_width - 7, "─┤")
+    stdscr.addstr("t", curses.color_pair(COLOR_PAIR_DARK))
+    stdscr.addstr("op├")
+    stdscr.addstr(1, 3, f" Keystore: {ORIGINAL_KEYSTORE_PATH} ", curses.color_pair(COLOR_PAIR_HEADER))
+
+    stdscr.addch(height - 2, 0, curses.ACS_LLCORNER)
+    stdscr.addch(height - 2, panel_width - 1, curses.ACS_LRCORNER)
+    stdscr.hline(height - 2, 1, curses.ACS_HLINE, panel_width - 2)
+    stdscr.addstr(height - 2, panel_width - 7, "─┤")
+    stdscr.addstr("b", curses.color_pair(COLOR_PAIR_DARK))
+    stdscr.addstr("ot├")
+
+    stdscr.addch(1, panel_width, curses.ACS_ULCORNER)
+    stdscr.addch(1, width - 1, curses.ACS_URCORNER)
+    stdscr.hline(1, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
+    stdscr.addstr(1, panel_width + 3, " Details ", curses.color_pair(COLOR_PAIR_HEADER))
+    stdscr.addch(height - 2, panel_width, curses.ACS_LLCORNER)
+    stdscr.addch(height - 2, width - 1, curses.ACS_LRCORNER)
+    stdscr.hline(height - 2, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
+
+    # Left panel entries
+    for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
+        y_pos = 2 + i - scroll_offset
+        alias = entries[i].get("Alias name", "<unknown>")
+        is_expired = entries[i].get("__expired__", False)
+        if active_panel == LEFT_PANEL:
+            if i == selected:
+                attr = curses.color_pair(COLOR_PAIR_SELECTED)
+            elif is_expired:
+                attr = curses.color_pair(COLOR_PAIR_EXPIRED)
+            else:
+                attr = curses.color_pair(COLOR_PAIR_ACTIVE)
+        else:
+            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
+        stdscr.move(y_pos, 1)
+        stdscr.clrtoeol()
+        stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
+
+    # Clear remaining left panel rows
+    for y in range(2 + len(entries) - scroll_offset, height - 2):
+        stdscr.move(y, 1)
+        stdscr.clrtoeol()
+
+    # Right panel details
+    detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
+    line_num = 2
+    for key, value in detail_lines:
+        if line_num >= height - 2:
+            break
+        lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
+        attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
+
+        stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
+        if key == "Valid from" and entries[selected].get("__expired__") == True:
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | curses.color_pair(COLOR_PAIR_EXPIRED))
+        else:
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
+        line_num += 1
+        for l in lines:
+            if line_num >= height - 2:
+                break
+            stdscr.addstr(line_num, panel_width + 4, " " * (width - panel_width - 5))
+            stdscr.addstr(line_num, panel_width + 4, l, attr)
+            line_num += 1
+
+    # Clear remaining right panel rows
+    for y in range(line_num, height - 2):
+        stdscr.addstr(y, panel_width + 2, " " * (width - panel_width - 3))
+
+    # Restore  vertical lines that may have been cleared
+    for y in range(2, height - 2):
+        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width, curses.ACS_VLINE)
+        stdscr.addch(y, panel_width * 2, curses.ACS_VLINE)
+
+    stdscr.move(0, 0)
+    stdscr.refresh()
+    return scroll_offset
 
 def main(stdscr):
     init_curses()
-    footer_options = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
+    curses.set_escdelay(25)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win, False)
@@ -1087,11 +1179,14 @@ def main(stdscr):
     has_unsaved_changes = False
 
     while True:
-        draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes)
-        draw_footer(stdscr, has_unsaved_changes, footer_options)
-        key = stdscr.getch()
         height, width = stdscr.getmaxyx()
         panel_height = height - 4  # Subtract top and bottom padding (borders)
+
+        draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes)
+        draw_menu_bar("", width)
+        draw_footer(stdscr, has_unsaved_changes)
+
+        key = stdscr.getch()
         if key == curses.KEY_MOUSE:
             try:
                 _, mx, my, _, mouse_event = curses.getmouse()
@@ -1168,7 +1263,7 @@ def main(stdscr):
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
-            highlight_footer_key(stdscr, (key - curses.KEY_F1), footer_options)
+            highlight_footer_key(stdscr, (key - curses.KEY_F1))
 
             if key == curses.KEY_F3:
                 alias = import_cert_file(stdscr, password)
@@ -1206,6 +1301,9 @@ def main(stdscr):
                 has_unsaved_changes = delete_entry(password, entries[selected].get("Alias name"))
                 entries = get_keystore_entries(KEYSTORE_PATH, password)
                 selected = min(selected, len(entries) - 1)
+
+            elif key == curses.KEY_F9:
+                menu_modal(stdscr, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
                 has_unsaved_changes = save_changes(has_unsaved_changes)
