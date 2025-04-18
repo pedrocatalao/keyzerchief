@@ -861,6 +861,7 @@ def menu_modal(stdscr, redraw_main_ui=None):
         submenu_win.refresh()
         return submenu_win
 
+    draw_menu_bar(active_menu, width)
     submenu_win = draw_submenu()
     submenu_win = None
 
@@ -891,7 +892,7 @@ def menu_modal(stdscr, redraw_main_ui=None):
             draw_menu_bar(active_menu, width)
             draw_submenu()
 
-        elif key in (curses.KEY_DOWN):
+        elif key == curses.KEY_DOWN:
             if selected_index is None:
                 selected_index = 0
             else:
@@ -994,7 +995,7 @@ def show_logo(win, final):
     # Scramble effect before revealing
     if not final:
         temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
-        for idx, color in enumerate([234, 236, 58, 100, 136, 178, 220, 11, 11, 11, 11, 11, 11]):
+        for idx, color in enumerate([234, 236, 58, 100, 136, 178]):
             curses.init_pair(30 + idx, color, -1)
             for i, row in enumerate(temp_lines):
                 line = ''.join(random.choice('▓ ▒ ░ ▀') if ch != ' ' else ' ' for ch in row)
@@ -1006,7 +1007,7 @@ def show_logo(win, final):
     for i, line in enumerate(logo_lines):
         win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(COLOR_PAIR_HEADER))
     win.refresh()
-    curses.napms(400)
+    curses.napms(100)
 
 def fade_logo(win):
     logo_lines = get_logo_lines()
