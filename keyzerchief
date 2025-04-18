@@ -10,6 +10,7 @@ import base64
 import gzip
 import random
 import time
+import threading
 from io import BytesIO
 from datetime import datetime
 from datetime import datetime, timezone
@@ -28,6 +29,10 @@ KEYSTORE_COPY_PATH = tempfile.NamedTemporaryFile(delete=False, suffix=".jks").na
 KEYSTORE_PATH = KEYSTORE_COPY_PATH
 shutil.copyfile(ORIGINAL_KEYSTORE_PATH, KEYSTORE_COPY_PATH)
 
+# Logo position
+LOGO_X = 4
+LOGO_Y = 2
+
 # Colors
 COLOR_PAIR_SELECTED = 1
 COLOR_PAIR_HEADER = 2
@@ -45,6 +50,24 @@ COLOR_PAIR_DARKER = 12
 # Mouse support constants
 LEFT_PANEL = 0
 RIGHT_PANEL = 1
+
+def init_curses():
+    curses.curs_set(0)
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
+    curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
+    curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+    curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
+    curses.init_pair(COLOR_PAIR_ACTIVE, 231, -1)
+    curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
+    curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
+    curses.init_pair(COLOR_PAIR_DARK, 245, -1)
+    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
+    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED, 203, -1)
+    curses.init_pair(COLOR_PAIR_DARKER, 239, -1)
+    curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
 def file_picker(stdscr, start_path="."):
     win_height = 20
@@ -615,7 +638,7 @@ def prompt_url_input(stdscr):
         popup_box(win, "Import SSL Certificate from URL")
         win.addstr(3, 2, "Hostname:Port (e.g. example.com:443):")
         attr = curses.A_REVERSE if not in_buttons else curses.A_NORMAL
-        win.addstr(4, 2, value[-40:].ljust(win_width-4), attr)
+        win.addstr(4, 2, value[-40:].ljust(win_width - 4), attr)
 
         win.addstr(5, 2, " " * (win_width - 4))
         import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
@@ -897,17 +920,6 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         stdscr.addch(y, panel_width, curses.ACS_VLINE)
         stdscr.addch(y, panel_width * 2, curses.ACS_VLINE)
 
-    # Footer
-    footer_options = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
-    spacing = width // len(footer_options)
-    for i, item in enumerate(footer_options):
-        label = item[2:]
-        prefix = item[:2]
-        attr_key = curses.color_pair(COLOR_PAIR_SELECTED) if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_FKEYS)
-        attr_label = curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_HEADER)
-        stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
-        stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), attr_label)
-
     stdscr.move(0, 0)
     stdscr.refresh()
     return scroll_offset
@@ -990,10 +1002,7 @@ def intro_window(stdscr):
     return intro_win
 
 def show_logo(win, final):
-    logo_x = 4
-    logo_y = 2
     logo_lines = get_logo_lines()
-
     # Scramble effect before revealing
     if not final:
         temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
@@ -1001,65 +1010,66 @@ def show_logo(win, final):
             curses.init_pair(30 + idx, color, -1)
             for i, row in enumerate(temp_lines):
                 line = ''.join(random.choice('▓ ▒ ░ ▀') if ch != ' ' else ' ' for ch in row)
-                win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
+                win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(30 + idx) | curses.A_DIM)
             win.refresh()
             curses.napms(50)
 
     # Final logo render
     for i, line in enumerate(logo_lines):
-        win.addstr(logo_y + i, logo_x, line, curses.color_pair(COLOR_PAIR_HEADER))
+        win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(COLOR_PAIR_HEADER))
     win.refresh()
     curses.napms(400)
 
 def fade_logo(win):
-    logo_x = 4
-    logo_y = 2
     logo_lines = get_logo_lines()
     for idx, color in enumerate([220, 178, 136, 100, 58, 236, 234]):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
-            win.addstr(logo_y + i, logo_x, line, curses.color_pair(30 + idx) | curses.A_DIM)
+            win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(30 + idx) | curses.A_DIM)
         win.refresh()
         curses.napms(100)
         win.clear()
 
 def shake_logo(win):
-    logo_x = 4
-    logo_y = 2
     logo_lines = get_logo_lines()
     for shake in [-1, 1, -1, 1, 0]:
         for i, line in enumerate(logo_lines): # Clean previous frame
-            win.addstr(logo_y + i, logo_x, " " * (len(line)+1))
+            win.addstr(LOGO_Y + i, LOGO_X, " " * (len(line)+1))
         win.refresh()
         for i, line in enumerate(logo_lines):
-            win.addstr(logo_y + i, logo_x + shake, line, curses.color_pair(COLOR_PAIR_RED))
+            win.addstr(LOGO_Y + i, LOGO_X + shake, line, curses.color_pair(COLOR_PAIR_RED))
         win.refresh()
         curses.napms(50)
     show_logo(win, True)
 
+def draw_footer(stdscr, has_unsaved_changes, footer_options):
+    height, width = stdscr.getmaxyx()
+    spacing = width // len(footer_options)
+    for i, item in enumerate(footer_options):
+        label = item[2:]
+        prefix = item[:2]
+        attr_key = curses.color_pair(COLOR_PAIR_SELECTED) if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_FKEYS)
+        stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
+        stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
+
+def highlight_footer_key(stdscr, key_index, footer_options):
+    height, width = stdscr.getmaxyx()
+    spacing = width // len(footer_options)
+    label = footer_options[key_index][2:]
+    stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
+    stdscr.refresh()
+    time.sleep(0.2) # Keep highlight momentarily
+    stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
+
+
 def main(stdscr):
-    curses.curs_set(0)
-    curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
-    curses.start_color()
-    curses.use_default_colors()
-    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
-    curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
-    curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
-    curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
-    curses.init_pair(COLOR_PAIR_ACTIVE, 231, -1)
-    curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
-    curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
-    curses.init_pair(COLOR_PAIR_DARK, 245, -1)
-    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
-    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
-    curses.init_pair(COLOR_PAIR_EXPIRED, 203, -1)
-    curses.init_pair(COLOR_PAIR_DARKER, 239, -1)
+    init_curses()
+    footer_options = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win, False)
 
-    password = ""
-    if not check_password(KEYSTORE_PATH, ""):
+    if not check_password(KEYSTORE_PATH, password=""):
         password = prompt_password(intro_win)
     else:
         fade_logo(intro_win)
@@ -1081,11 +1091,11 @@ def main(stdscr):
 
     while True:
         draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes)
+        #threading.Thread(target=draw_footer(stdscr, has_unsaved_changes, highlight_footer_key), daemon=True).start()
+        draw_footer(stdscr, has_unsaved_changes, footer_options)
         key = stdscr.getch()
-
         height, width = stdscr.getmaxyx()
         panel_height = height - 4  # Subtract top and bottom padding (borders)
-
         if key == curses.KEY_MOUSE:
             try:
                 _, mx, my, _, mouse_event = curses.getmouse()
@@ -1161,46 +1171,49 @@ def main(stdscr):
         elif key == ord('\t') or key == 9:
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
-        elif key == curses.KEY_F3:
-            alias = import_cert_file(stdscr, password)
-            entries = get_keystore_entries(KEYSTORE_PATH, password)
-            selected = find_entry_index_by_alias(entries, alias)
-            has_unsaved_changes = check_unsaved_changes()
+        elif curses.KEY_F1 <= key <= curses.KEY_F10:
+            highlight_footer_key(stdscr, (key - curses.KEY_F1), footer_options)
 
-        elif key == curses.KEY_F4:
-            choice = prompt_import_key_type(stdscr)
-            if choice == "PKCS #12":
-                form_data = prompt_import_pkcs12_form(stdscr)
-                if form_data:
-                    alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
-                    entries = get_keystore_entries(KEYSTORE_PATH, password)
-                    selected = find_entry_index_by_alias(entries, alias)
-                    has_unsaved_changes = check_unsaved_changes()
-            elif choice == "PKCS #8":
-                form_data = prompt_import_pkcs8_form(stdscr)
-                if form_data:
-                    alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
-                    entries = get_keystore_entries(KEYSTORE_PATH, password)
-                    selected = find_entry_index_by_alias(entries, alias)
-                    has_unsaved_changes = check_unsaved_changes()
+            if key == curses.KEY_F3:
+                alias = import_cert_file(stdscr, password)
+                entries = get_keystore_entries(KEYSTORE_PATH, password)
+                selected = find_entry_index_by_alias(entries, alias)
+                has_unsaved_changes = check_unsaved_changes()
 
-        elif key == curses.KEY_F5:
-            alias = import_cert_from_url(stdscr, password)
-            entries = get_keystore_entries(KEYSTORE_PATH, password)
-            selected = find_entry_index_by_alias(entries, alias)
-            has_unsaved_changes = check_unsaved_changes()
+            elif key == curses.KEY_F4:
+                choice = prompt_import_key_type(stdscr)
+                if choice == "PKCS #12":
+                    form_data = prompt_import_pkcs12_form(stdscr)
+                    if form_data:
+                        alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
+                        entries = get_keystore_entries(KEYSTORE_PATH, password)
+                        selected = find_entry_index_by_alias(entries, alias)
+                        has_unsaved_changes = check_unsaved_changes()
+                elif choice == "PKCS #8":
+                    form_data = prompt_import_pkcs8_form(stdscr)
+                    if form_data:
+                        alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
+                        entries = get_keystore_entries(KEYSTORE_PATH, password)
+                        selected = find_entry_index_by_alias(entries, alias)
+                        has_unsaved_changes = check_unsaved_changes()
 
-        elif key == curses.KEY_F7:
-            has_unsaved_changes = save_changes(has_unsaved_changes)
+            elif key == curses.KEY_F5:
+                alias = import_cert_from_url(stdscr, password)
+                entries = get_keystore_entries(KEYSTORE_PATH, password)
+                selected = find_entry_index_by_alias(entries, alias)
+                has_unsaved_changes = check_unsaved_changes()
 
-        elif key == curses.KEY_F8:
-            has_unsaved_changes = delete_entry(password, entries[selected].get("Alias name"))
-            entries = get_keystore_entries(KEYSTORE_PATH, password)
-            selected = min(selected, len(entries) - 1)
+            elif key == curses.KEY_F7:
+                has_unsaved_changes = save_changes(has_unsaved_changes)
 
-        elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
-            has_unsaved_changes = save_changes(has_unsaved_changes)
-            break
+            elif key == curses.KEY_F8:
+                has_unsaved_changes = delete_entry(password, entries[selected].get("Alias name"))
+                entries = get_keystore_entries(KEYSTORE_PATH, password)
+                selected = min(selected, len(entries) - 1)
+
+            elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
+                has_unsaved_changes = save_changes(has_unsaved_changes)
+                break
 
         if has_unsaved_changes:
             if selected == len(entries) - 1:
