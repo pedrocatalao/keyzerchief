@@ -35,16 +35,16 @@ LOGO_Y = 2
 
 # Colors
 COLOR_PAIR_SELECTED = 1
-COLOR_PAIR_HEADER = 2
-COLOR_PAIR_MENU = 3
-COLOR_PAIR_FKEYS = 4
-COLOR_PAIR_ACTIVE = 5
-COLOR_PAIR_INACTIVE = 6
-COLOR_PAIR_WARN = 7
-COLOR_PAIR_DARK = 8
-COLOR_PAIR_NAVY = 9
-COLOR_PAIR_RED = 10
-COLOR_PAIR_EXPIRED = 11
+COLOR_PAIR_SELECTED_DIM = 2
+COLOR_PAIR_HEADER = 3
+COLOR_PAIR_MENU = 4
+COLOR_PAIR_FKEYS = 5
+COLOR_PAIR_WHITE = 6
+COLOR_PAIR_WHITE_DIM = 7
+COLOR_PAIR_NAVY = 8
+COLOR_PAIR_EXPIRED = 9
+COLOR_PAIR_EXPIRED_DIM = 10
+COLOR_PAIR_DARK = 11
 COLOR_PAIR_DARKER = 12
 
 # Mouse support constants
@@ -57,21 +57,23 @@ MENU_ITEMS = ["Left", "File", "Options", "Right"]
 FOOTER_OPTIONS = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
 
 def init_curses():
+    curses.set_escdelay(25) # Esc key faster
     curses.curs_set(0)
     curses.start_color()
     curses.use_default_colors()
     curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
+    curses.init_pair(COLOR_PAIR_SELECTED_DIM, curses.COLOR_BLACK, 73)
     curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
     curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
     curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
-    curses.init_pair(COLOR_PAIR_ACTIVE, 231, -1)
-    curses.init_pair(COLOR_PAIR_INACTIVE, curses.COLOR_WHITE, -1)
-    curses.init_pair(COLOR_PAIR_WARN, curses.COLOR_BLACK, 202)
+    curses.init_pair(COLOR_PAIR_WHITE, 231, -1)
+    curses.init_pair(COLOR_PAIR_WHITE_DIM, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
-    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
-    curses.init_pair(COLOR_PAIR_RED, curses.COLOR_RED, -1)
-    curses.init_pair(COLOR_PAIR_EXPIRED, 203, -1)
     curses.init_pair(COLOR_PAIR_DARKER, 239, -1)
+    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED, 167, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED_DIM, 131, -1)
+
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
 def file_picker(stdscr, start_path="."):
@@ -831,7 +833,7 @@ def draw_menu_bar(active_menu, width):
         x += len(item) + 2
     bar_win.refresh()
 
-def menu_modal(stdscr, redraw_main_ui=None):
+def menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=None):
     submenus = {
         "Left": ["Search", "Filter"],
         "File": ["Open keystore", "Quit"],
@@ -913,13 +915,17 @@ def menu_modal(stdscr, redraw_main_ui=None):
                 submenu_win.refresh()
             return None, None
 
+        elif key == curses.KEY_F10:
+            save_changes(has_unsaved_changes)
+            exit(0)
+
 def prompt_password(win):
     win_y, win_x = win.getbegyx()
     while True:
         curses.noecho()
         title = "Keyzer Chief 0.9b"
         for i in range(len(title)):
-            win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_INACTIVE) | curses.A_BOLD)
+            win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
             win.refresh()
             curses.napms(9)
         win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_NAVY) | curses.A_ITALIC)
@@ -975,7 +981,7 @@ def popup_box(win, title):
     label_x = width - len(esc_label) - 1
     win.attron(curses.color_pair(COLOR_PAIR_DARKER))
     win.box()
-    win.addstr(0, max(2, (width - len(title)) // 2), title[:width - 4], curses.color_pair(COLOR_PAIR_MENU))
+    win.addstr(0, max(2, (width - len(title)) // 2), f"{title[:width - 4]}", curses.color_pair(COLOR_PAIR_MENU))
     win.addstr(height - 1, label_x, esc_label)
     win.attroff(curses.color_pair(COLOR_PAIR_DARKER))
     win.addstr(height - 1, label_x + 2, "esc", curses.color_pair(COLOR_PAIR_HEADER))
@@ -1026,7 +1032,7 @@ def shake_logo(win):
             win.addstr(LOGO_Y + i, LOGO_X, " " * (len(line)+1))
         win.refresh()
         for i, line in enumerate(logo_lines):
-            win.addstr(LOGO_Y + i, LOGO_X + shake, line, curses.color_pair(COLOR_PAIR_RED))
+            win.addstr(LOGO_Y + i, LOGO_X + shake, line, curses.color_pair(COLOR_PAIR_EXPIRED_DIM))
         win.refresh()
         curses.napms(50)
     show_logo(win, True)
@@ -1050,11 +1056,18 @@ def highlight_footer_key(stdscr, key_index):
     time.sleep(0.2) # Keep highlight momentarily
     stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
-def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes):
+def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, dim=False):
     height, width = stdscr.getmaxyx()
     panel_width = width // 2
     max_detail_width = width - panel_width - 5
     visible_height = height - 4
+
+    if dim:
+        stdscr.attron(curses.A_DIM)
+        title_attr = curses.color_pair(COLOR_PAIR_HEADER) | curses.A_DIM
+    else:
+        stdscr.attroff(curses.A_DIM)
+        title_attr = curses.color_pair(COLOR_PAIR_HEADER)
 
     # Fix scroll offset if needed
     if selected < scroll_offset:
@@ -1075,8 +1088,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     stdscr.addstr(1, panel_width - 7, "─┤")
     stdscr.addstr("t", curses.color_pair(COLOR_PAIR_DARK))
     stdscr.addstr("op├")
-    stdscr.addstr(1, 3, f" Keystore: {ORIGINAL_KEYSTORE_PATH} ", curses.color_pair(COLOR_PAIR_HEADER))
-
+    stdscr.addstr(1, 3, f" Keystore: {ORIGINAL_KEYSTORE_PATH} ", title_attr)
     stdscr.addch(height - 2, 0, curses.ACS_LLCORNER)
     stdscr.addch(height - 2, panel_width - 1, curses.ACS_LRCORNER)
     stdscr.hline(height - 2, 1, curses.ACS_HLINE, panel_width - 2)
@@ -1087,7 +1099,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     stdscr.addch(1, panel_width, curses.ACS_ULCORNER)
     stdscr.addch(1, width - 1, curses.ACS_URCORNER)
     stdscr.hline(1, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
-    stdscr.addstr(1, panel_width + 3, " Details ", curses.color_pair(COLOR_PAIR_HEADER))
+    stdscr.addstr(1, panel_width + 3, " Details ", title_attr)
     stdscr.addch(height - 2, panel_width, curses.ACS_LLCORNER)
     stdscr.addch(height - 2, width - 1, curses.ACS_LRCORNER)
     stdscr.hline(height - 2, panel_width + 1, curses.ACS_HLINE, width - panel_width - 2)
@@ -1103,11 +1115,20 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
             elif is_expired:
                 attr = curses.color_pair(COLOR_PAIR_EXPIRED)
             else:
-                attr = curses.color_pair(COLOR_PAIR_ACTIVE)
+                attr = curses.color_pair(COLOR_PAIR_WHITE)
         else:
-            attr = curses.color_pair(COLOR_PAIR_INACTIVE)
+            if i == selected:
+                attr = curses.color_pair(COLOR_PAIR_SELECTED_DIM)
+            elif is_expired:
+                attr = curses.color_pair(COLOR_PAIR_EXPIRED_DIM)
+            else:
+                attr = curses.color_pair(COLOR_PAIR_WHITE_DIM)
         stdscr.move(y_pos, 1)
         stdscr.clrtoeol()
+
+        if dim:
+            attr |= curses.A_DIM
+
         stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
 
     # Clear remaining left panel rows
@@ -1122,11 +1143,16 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         if line_num >= height - 2:
             break
         lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
-        attr = curses.color_pair(COLOR_PAIR_ACTIVE if active_panel == RIGHT_PANEL else COLOR_PAIR_INACTIVE)
+        attr = curses.color_pair(COLOR_PAIR_WHITE if active_panel == RIGHT_PANEL else COLOR_PAIR_WHITE_DIM)
+        attrexp = curses.color_pair(COLOR_PAIR_EXPIRED if active_panel == RIGHT_PANEL else COLOR_PAIR_EXPIRED_DIM)
+
+        if dim:
+            attr |= curses.A_DIM
+            attrexp |= curses.A_DIM
 
         stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
         if key == "Valid from" and entries[selected].get("__expired__") == True:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | curses.color_pair(COLOR_PAIR_EXPIRED))
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attrexp)
         else:
             stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
         line_num += 1
@@ -1153,8 +1179,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 
 def main(stdscr):
     init_curses()
-    curses.set_escdelay(25)
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # Disable CTRL+C
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win, False)
@@ -1183,9 +1208,9 @@ def main(stdscr):
         height, width = stdscr.getmaxyx()
         panel_height = height - 4  # Subtract top and bottom padding (borders)
 
-        draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes)
-        draw_menu_bar("", width)
+        draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel)
         draw_footer(stdscr, has_unsaved_changes)
+        draw_menu_bar(None, width)
 
         key = stdscr.getch()
         if key == curses.KEY_MOUSE:
@@ -1267,12 +1292,14 @@ def main(stdscr):
             highlight_footer_key(stdscr, (key - curses.KEY_F1))
 
             if key == curses.KEY_F3:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = import_cert_file(stdscr, password)
                 entries = get_keystore_entries(KEYSTORE_PATH, password)
                 selected = find_entry_index_by_alias(entries, alias)
                 has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F4:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 choice = prompt_import_key_type(stdscr)
                 if choice == "PKCS #12":
                     form_data = prompt_import_pkcs12_form(stdscr)
@@ -1290,24 +1317,28 @@ def main(stdscr):
                         has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F5:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = import_cert_from_url(stdscr, password)
                 entries = get_keystore_entries(KEYSTORE_PATH, password)
                 selected = find_entry_index_by_alias(entries, alias)
                 has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F7:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 has_unsaved_changes = save_changes(has_unsaved_changes)
 
             elif key == curses.KEY_F8:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 has_unsaved_changes = delete_entry(password, entries[selected].get("Alias name"))
                 entries = get_keystore_entries(KEYSTORE_PATH, password)
                 selected = min(selected, len(entries) - 1)
 
             elif key == curses.KEY_F9:
-                menu_modal(stdscr, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, has_unsaved_changes))
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+                menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
-                has_unsaved_changes = save_changes(has_unsaved_changes)
+                save_changes(has_unsaved_changes)
                 break
 
         if has_unsaved_changes:
