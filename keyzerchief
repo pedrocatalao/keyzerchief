@@ -46,12 +46,14 @@ COLOR_PAIR_EXPIRED = 9
 COLOR_PAIR_EXPIRED_DIM = 10
 COLOR_PAIR_DARK = 11
 COLOR_PAIR_DARKER = 12
+COLOR_PAIR_FIELD = 13
 
 # Mouse support constants
 LEFT_PANEL = 0
 RIGHT_PANEL = 1
 
-# MENU AND FOOTER
+# Menu, footer and other settings
+BUTTON_SPACING = 4
 MENU_SPACING = 3
 MENU_ITEMS = ["Left", "File", "Options", "Right"]
 FOOTER_OPTIONS = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
@@ -69,11 +71,11 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_WHITE, 231, -1)
     curses.init_pair(COLOR_PAIR_WHITE_DIM, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
-    curses.init_pair(COLOR_PAIR_DARKER, 239, -1)
+    curses.init_pair(COLOR_PAIR_DARKER, 237, -1)
     curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED, 167, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED_DIM, 131, -1)
-
+    curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
 def file_picker(stdscr, start_path="."):
@@ -319,10 +321,11 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
 
 def prompt_import_pkcs8_form(stdscr):
     height, width = stdscr.getmaxyx()
-    win_width = 70
-    win_height = 13
+    win_width = 75
+    win_height = 14
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
+    buttons = [" Import ", " Cancel "]
 
     win = curses.newwin(win_height, win_width, start_y, start_x)
     win.keypad(True)
@@ -336,45 +339,45 @@ def prompt_import_pkcs8_form(stdscr):
 
     while True:
         popup_box(win, "Import PKCS #8 Key Pair")
-        win.addstr(3, 2, "Encrypted Private Key:")
+        option = "Encrypted Private Key:"
+        win.addstr(2, 2, option)
         yes_attr = curses.color_pair(COLOR_PAIR_MENU) if encrypted else curses.A_NORMAL
         no_attr = curses.color_pair(COLOR_PAIR_MENU) if not encrypted else curses.A_NORMAL
         if current == -2:
             yes_attr |= curses.A_BOLD
             no_attr |= curses.A_BOLD
-        win.addstr(3, 26, " Yes ", yes_attr)
-        win.addstr(3, 33, " No ", no_attr)
-
+        win.addstr(2, 25, " Yes ", yes_attr)
+        win.addstr(2, 33, " No ", no_attr)
+        field_start_x = max(max(len(label) for label in labels), len(option))
         field_index = 0
         for i, label in enumerate(labels):
-            y_pos = 5 + i
+            y_pos = 4 + 2 * i
             if not encrypted and i == 2:
                 win.move(y_pos, 2)
-                win.addstr(y_pos, 2, " " * (win_width - 4))
+                win.addstr(y_pos, field_start_x - len(label) + 2, " " * (win_width - 4))
                 continue
             else:
-                win.addstr(y_pos, 2, label)
+                win.addstr(y_pos, field_start_x - len(label) + 2, label)
 
             field_index = i
             is_selected = (not in_buttons and current == field_index)
-            attr = curses.A_REVERSE if is_selected else curses.A_NORMAL
+            attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
 
             if i == 2:
                 display_value = '*' * len(values[i])
             else:
                 display_value = values[i]
 
-            win.addstr(y_pos, len(label) + 3, display_value.ljust(win_width - len(label) - 5), attr)
+            win.addstr(y_pos, field_start_x + 3, display_value.ljust(win_width - field_start_x - 5), attr)
 
-        win.addstr(11, 2, " " * (win_width - 4))
         import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
         cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
 
-        win.addstr(11, 2, "[", curses.A_BOLD)
-        win.addstr(" Import ", import_attr | curses.A_BOLD)
-        win.addstr("]   [", curses.A_BOLD)
-        win.addstr(" Cancel ", cancel_attr | curses.A_BOLD)
-        win.addstr("]", curses.A_BOLD)
+        buttons_x = (win_width - (sum(len(btn) for btn in buttons) + BUTTON_SPACING * (len(buttons) - 1))) // 2
+        for _, btn in enumerate(buttons):
+            attr = import_attr if "Import" in btn else cancel_attr
+            win.addstr(12, buttons_x, btn, attr)
+            buttons_x += len(btn) + BUTTON_SPACING
 
         if not in_buttons:
             if current >= 0:
@@ -470,7 +473,7 @@ def prompt_import_key_type(stdscr):
 def import_cert_file(stdscr, password):
     height, width = stdscr.getmaxyx()
     win_width = 60
-    win_height = 9
+    win_height = 8
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
 
@@ -483,22 +486,17 @@ def import_cert_file(stdscr, password):
 
     while True:
         popup_box(win, "Import Certificate File")
-        win.addstr(3, 2, label)
-        attr = curses.A_REVERSE if not in_buttons else curses.A_NORMAL
-        win.addstr(3, 20, value[-38:].ljust(38), attr)
+        win.addstr(2, 2, label)
+        attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
+        win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
 
         win.addstr(5, 2, " " * (win_width - 4))
         import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
         cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
 
-        win.addstr(7, 2, "[", curses.A_BOLD)
-        win.addstr(" Import ", import_attr | curses.A_BOLD)
-        win.addstr("]   [", curses.A_BOLD)
-        win.addstr(" Cancel ", cancel_attr | curses.A_BOLD)
-        win.addstr("]", curses.A_BOLD)
-
-        if not in_buttons:
-            win.move(3, 20 + len(value))
+        win.addstr(6, 2, " Import ", import_attr)
+        win.addstr("   ")
+        win.addstr(" Cancel ", cancel_attr)
 
         win.refresh()
         key = win.getch()
@@ -514,7 +512,7 @@ def import_cert_file(stdscr, password):
             elif key in [curses.KEY_BACKSPACE, 127, 8]:
                 value = value[:-1]
             elif 32 <= key <= 126:
-                if len(value) < 60:
+                if len(value) < win_width - 4:
                     value += chr(key)
         else:
             if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
@@ -628,7 +626,7 @@ def prompt_url_input(stdscr):
     curses.curs_set(0)
     height, width = stdscr.getmaxyx()
     win_width = 60
-    win_height = 9
+    win_height = 8
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
 
@@ -640,19 +638,17 @@ def prompt_url_input(stdscr):
 
     while True:
         popup_box(win, "Import SSL Certificate from URL")
-        win.addstr(3, 2, "Hostname:Port (e.g. example.com:443):")
-        attr = curses.A_REVERSE if not in_buttons else curses.A_NORMAL
-        win.addstr(4, 2, value[-40:].ljust(win_width - 4), attr)
+        win.addstr(2, 2, "Hostname:Port (e.g. example.com:443):")
+        attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
+        win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
 
         win.addstr(5, 2, " " * (win_width - 4))
         import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
         cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
 
-        win.addstr(7, 2, "[", curses.A_BOLD)
-        win.addstr(" Import ", import_attr | curses.A_BOLD)
-        win.addstr("]   [", curses.A_BOLD)
-        win.addstr(" Cancel ", cancel_attr | curses.A_BOLD)
-        win.addstr("]", curses.A_BOLD)
+        win.addstr(6, 2, " Import ", import_attr)
+        win.addstr("   ")
+        win.addstr(" Cancel ", cancel_attr)
 
         win.refresh()
         key = win.getch()
@@ -666,7 +662,7 @@ def prompt_url_input(stdscr):
             elif key in [curses.KEY_BACKSPACE, 127, 8]:
                 value = value[:-1]
             elif 32 <= key <= 126:
-                if len(value) < 60:
+                if len(value) < win_width - 4:
                     value += chr(key)
         else:
             if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
@@ -833,7 +829,7 @@ def draw_menu_bar(active_menu, width):
         x += len(item) + 2
     bar_win.refresh()
 
-def menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=None):
+def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
     submenus = {
         "Left": ["Search", "Filter"],
         "File": ["Open keystore", "Quit"],
@@ -841,7 +837,6 @@ def menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=None):
         "Right": ["Search content"]
     }
 
-    active_menu = 0  # Start focus on "Left"
     selected_index = None
     _, width = stdscr.getmaxyx()
 
@@ -869,6 +864,32 @@ def menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=None):
 
     while True:
         key = stdscr.getch()
+
+        if key == curses.KEY_MOUSE:
+            _, mx, my, _, mouse_event = curses.getmouse()
+            if my == 0:
+                x = 1
+                for i, item in enumerate(MENU_ITEMS):
+                    item_len = len(f" {item} ")
+                    if x <= mx < x + item_len:
+                        if active_menu == i:
+                            if submenu_win:
+                                submenu_win.clear()
+                                submenu_win.refresh()
+                            return None, None
+                        else:
+                            active_menu = i
+                        if submenu_win:
+                            submenu_win.clear()
+                            submenu_win.refresh()
+                            submenu_win = None
+                            selected_index = None
+                        if redraw_main_ui:
+                            redraw_main_ui()
+                        draw_menu_bar(active_menu, width)
+                        draw_submenu()
+                        break
+                    x += item_len + 2
 
         if key == curses.KEY_LEFT:
             if submenu_win:
@@ -909,7 +930,7 @@ def menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=None):
             selected_index = (selected_index + 1) % len(submenus[MENU_ITEMS[active_menu]])
             submenu_win = draw_submenu()
 
-        elif key == 27:  # ESC
+        elif key in [curses.KEY_F9, 27]:  # ESC
             if submenu_win:
                 submenu_win.clear()
                 submenu_win.refresh()
@@ -1217,10 +1238,21 @@ def main(stdscr):
             try:
                 _, mx, my, _, mouse_event = curses.getmouse()
 
-                if my == 1 and width // 2 - 6 <= mx < width // 2:
-                    selected = 0  # Top click
+                if my == 0:
+                    x = 1
+                    for i, item in enumerate(MENU_ITEMS):
+                        item_len = len(f" {item} ")
+                        if x <= mx < x + item_len:
+                            active_menu = i
+                            draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+                            menu_modal(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                            break
+                        x += item_len + 2
+
+                if my == 1 and width // 2 - 6 <= mx < width // 2: # Clicked 'top'
+                    selected = 0
                     scroll_offset = 0
-                elif my == height - 2 and width // 2 - 6 <= mx < width // 2:
+                elif my == height - 2 and width // 2 - 6 <= mx < width // 2: # Clicked 'bot'
                     selected = len(entries) - 1
                     scroll_offset = max(0, len(entries) - panel_height)
 
@@ -1335,7 +1367,7 @@ def main(stdscr):
 
             elif key == curses.KEY_F9:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                menu_modal(stdscr, has_unsaved_changes, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                menu_modal(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
                 save_changes(has_unsaved_changes)
