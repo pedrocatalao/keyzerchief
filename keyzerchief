@@ -169,89 +169,6 @@ def file_picker(stdscr, start_path="."):
         elif selected_index >= scroll_offset + visible_height:
             scroll_offset = selected_index - visible_height + 1
 
-def prompt_import_pkcs12_form(stdscr):
-    title = "Import PKCS #12 Key Pair"
-    height, width = stdscr.getmaxyx()
-    win_width = 75
-    win_height = 10
-    start_y = (height - win_height) // 2
-    start_x = (width - win_width) // 2
-    buttons = [" Import ", " Cancel "]
-
-    win = curses.newwin(win_height, win_width, start_y, start_x)
-    win.keypad(True)
-
-    labels = ["Key pair file:", "Decryption password:"]
-    values = ["", ""]
-    field_count = len(labels)
-    current = 0
-    selected_button = 0
-    in_buttons = False
-    field_start_x = max(len(label) for label in labels)
-
-    while True:
-        popup_box(win, title)
-        for i, label in enumerate(labels):
-            y_pos = 2 + 2 * i
-            win.addstr(y_pos, field_start_x - len(label) + 2, label)
-            attr = curses.A_REVERSE if (not in_buttons and i == current) else curses.color_pair(COLOR_PAIR_FIELD)
-            display_value = values[i] if i == 0 else '*' * len(values[i])
-            win.addstr(y_pos, field_start_x + 3, display_value.ljust(win_width - field_start_x - 5), attr)
-
-        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.color_pair(COLOR_PAIR_FIELD)
-        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.color_pair(COLOR_PAIR_FIELD)
-
-        buttons_x = (win_width - (sum(len(btn) for btn in buttons) + BUTTON_SPACING * (len(buttons) - 1))) // 2
-        for _, btn in enumerate(buttons):
-             attr = import_attr if "Import" in btn else cancel_attr
-             win.addstr(8, buttons_x, btn, attr)
-             buttons_x += len(btn) + BUTTON_SPACING
-
-        if not in_buttons:
-            cursor_x = 22 + len(display_value)
-            win.move(3 + current, cursor_x)
-
-        win.refresh()
-        key = win.getch()
-
-        if not in_buttons:
-            if key == curses.KEY_UP and current > 0:
-                current -= 1
-            elif key == curses.KEY_DOWN:
-                if current < field_count - 1:
-                    current += 1
-                else:
-                    in_buttons = True
-                    selected_button = 0
-            elif key in [curses.KEY_BACKSPACE, 127, 8]:
-                if values[current]:
-                    values[current] = values[current][:-1]
-            elif 32 <= key <= 126:
-                if len(values[current]) < 30:
-                    values[current] += chr(key)
-            elif key in [10, 13]:
-                if current == 0:
-                    file_path = file_picker(stdscr)
-                    if file_path:
-                        values[0] = file_path
-        else:
-            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
-                selected_button = 1 - selected_button
-            elif key in [10, 13]:
-                if selected_button == 0 and all(values):
-                    curses.noecho()
-                    return {
-                        "key_file": values[0].strip(),
-                        "password": values[1].strip()
-                    }
-                else:
-                    return None
-            elif key == curses.KEY_UP:
-                in_buttons = False
-
-        if key == 27:
-            return None
-
 def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pass):
     stdscr.clear()
     stdscr.addstr(0, 2, "Importing key pair...", curses.A_BOLD)
@@ -281,15 +198,15 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pa
     stdscr.getch()
 
 def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
-    alias = os.path.splitext(os.path.basename(form_data['key_file']))[0]
+    alias = os.path.splitext(os.path.basename(form_data['pkcs8_key_file']))[0]
 
     pkcs8_cmd = [
         "openssl", "pkcs8",
         "-topk8",
         "-inform", "PEM",
         "-outform", "PEM",
-        "-in", form_data['key_file'],
-        "-passin", f"pass:{form_data['password']}" if form_data['encrypted'] else "pass:",
+        "-in", form_data['pkcs8_key_file'],
+        "-passin", f"pass:{form_data['decryption_password']}" if form_data['encrypted_key'] else "pass:",
         "-out", "/tmp/converted_pkcs8.key"
     ]
 
@@ -298,8 +215,8 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
         "-keystore", keystore_path,
         "-storepass", keystore_pass,
         "-alias", alias,
-        "-file", form_data['cert_file'],
-        "-keypass", form_data['password'] if form_data['encrypted'] else keystore_pass
+        "-file", form_data['certificates_file'],
+        "-keypass", form_data['decryption_password'] if form_data['encrypted_key'] else keystore_pass
     ]
 
     # Run OpenSSL to convert key
@@ -320,132 +237,132 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
     stdscr.refresh()
     stdscr.getch()
 
-def prompt_import_pkcs8_form(stdscr):
-    title = "Import PKCS #8 Key Pair"
+def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, choice_fields=None, dependencies=None, choice_labels=None):
     height, width = stdscr.getmaxyx()
     win_width = 75
-    win_height = 14
+    win_height = 2 * len(labels) + 6
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
     buttons = [" Import ", " Cancel "]
 
-    win = curses.newwin(win_height, win_width, start_y, start_x)
-    win.keypad(True)
+    file_fields = file_fields or []
+    masked_fields = masked_fields or []
+    choice_fields = choice_fields or []
+    dependencies = dependencies or {}
+    choice_labels = choice_labels or {i: ("Yes", "No") for i in choice_fields}
 
-    encrypted = True
-    labels = ["Certificates file:", "PKCS#8 key file:", "Decryption password:"]
-    values = ["", "", ""]
-    current = -2
+    values = [choice_labels[i][0] if i in choice_fields else "" for i in range(len(labels))]
+    current = 0
     selected_button = 0
     in_buttons = False
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
     field_start_x = max(len(label) for label in labels)
 
     while True:
         popup_box(win, title)
-        choice = "Encrypted Private Key:"
-        win.addstr(2, 2, choice)
-        yes_attr = curses.color_pair(COLOR_PAIR_MENU) if encrypted else curses.A_NORMAL
-        no_attr = curses.color_pair(COLOR_PAIR_MENU) if not encrypted else curses.A_NORMAL
-        if current == -2:
-            yes_attr |= curses.A_BOLD
-            no_attr |= curses.A_BOLD
-        win.addstr(2, 25, " Yes ", yes_attr)
-        win.addstr(2, 33, " No ", no_attr)
 
+        for y in range(2, win_height - 3):
+            win.addstr(y, 2, " " * (win_width - 4))
+
+        visible_fields = []
         for i, label in enumerate(labels):
-            y_pos = 4 + 2 * i
-            if not encrypted and i == 2:
-                win.move(y_pos, 2)
-                win.addstr(y_pos, field_start_x - len(label) + 2, " " * (win_width - 4))
-                continue
+            dep = dependencies.get(i)
+            if dep:
+                dep_idx, expected = dep
+                if values[dep_idx] != expected:
+                    continue
+
+            visible_fields.append(i)
+            y = 2 + 2 * len(visible_fields) - 2
+            is_selected = not in_buttons and i == current
+
+            if i in choice_fields:
+                options = choice_labels.get(i, ("Yes", "No"))
+                selected_value = values[i]
+                win.addstr(y, field_start_x - len(label) + 2, label)
+
+                x = field_start_x + 3
+                for opt in options:
+                    attr = curses.A_NORMAL
+                    if is_selected and selected_value == opt:
+                        attr |= curses.A_REVERSE
+                    elif not is_selected and selected_value == opt:
+                        attr = curses.color_pair(COLOR_PAIR_MENU)
+
+                    win.addstr(y, x, f" {opt} ", attr)
+                    x += len(opt) + 3
             else:
-                win.addstr(y_pos, field_start_x - len(label) + 2, label)
+                attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
+                val = values[i] if i not in masked_fields else '*' * len(values[i])
+                win.addstr(y, field_start_x - len(label) + 2, label)
+                win.addstr(y, field_start_x + 3, val.ljust(win_width - field_start_x - 5), attr)
 
-            field_index = i
-            is_selected = (not in_buttons and current == field_index)
-            attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
+        btn_y = win_height - 2
+        btn_x = (win_width - sum(len(b) for b in buttons) - BUTTON_SPACING) // 2
+        for i, btn in enumerate(buttons):
+            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
+            win.addstr(btn_y, btn_x, btn, attr)
+            btn_x += len(btn) + BUTTON_SPACING
 
-            if i == 2:
-                display_value = '*' * len(values[i])
+        if not in_buttons and current in visible_fields:
+            y = 2 + 2 * visible_fields.index(current)
+            if current in choice_fields:
+                options = choice_labels[current]
+                selected_index = options.index(values[current])
+                x = field_start_x + 3 + sum(len(opt) + 3 for opt in options[:selected_index])
+                win.move(y, x + 1)
             else:
-                display_value = values[i]
-
-            win.addstr(y_pos, field_start_x + 3, display_value.ljust(win_width - field_start_x - 5), attr)
-
-        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
-        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
-
-        buttons_x = (win_width - (sum(len(btn) for btn in buttons) + BUTTON_SPACING * (len(buttons) - 1))) // 2
-        for _, btn in enumerate(buttons):
-            attr = import_attr if "Import" in btn else cancel_attr
-            win.addstr(12, buttons_x, btn, attr)
-            buttons_x += len(btn) + BUTTON_SPACING
-
-        if not in_buttons:
-            if current >= 0:
-                y_cursor = 5 + current
-                x_cursor = 26 + len(values[current])
-                win.move(y_cursor, x_cursor)
+                val = values[current] if current not in masked_fields else '*' * len(values[current])
+                win.move(y, field_start_x + 3 + len(val))
 
         win.refresh()
         key = win.getch()
 
-        if current == -2:
-            if key in [10, 13]:
-                encrypted = not encrypted
-            elif key == curses.KEY_LEFT:
-                encrypted = True
-            elif key == curses.KEY_RIGHT:
-                encrypted = False
-            elif key == curses.KEY_DOWN:
-                current = 0
-        elif not in_buttons:
-            field_count = 3 if encrypted else 2
+        if key == 27:
+            return None
+
+        if not in_buttons:
             if key == curses.KEY_UP:
-                if current > 0:
-                    current -= 1
-                else:
-                    current = -2
+                idx = visible_fields.index(current)
+                if idx > 0:
+                    current = visible_fields[idx - 1]
             elif key == curses.KEY_DOWN:
-                if current < field_count - 1:
-                    current += 1
+                idx = visible_fields.index(current)
+                if idx < len(visible_fields) - 1:
+                    current = visible_fields[idx + 1]
                 else:
                     in_buttons = True
                     selected_button = 0
+            elif current in choice_fields:
+                opts = choice_labels.get(current, ("Yes", "No"))
+                idx = opts.index(values[current])
+                if key == curses.KEY_LEFT:
+                    values[current] = opts[(idx - 1) % len(opts)]
+                elif key == curses.KEY_RIGHT:
+                    values[current] = opts[(idx + 1) % len(opts)]
             elif key in [curses.KEY_BACKSPACE, 127, 8]:
-                if values[current]:
-                    values[current] = values[current][:-1]
-            elif 32 <= key <= 126:
-                if len(values[current]) < 60:
-                    values[current] += chr(key)
-            elif key in [10, 13]:
-                if current == 0:
-                    file_path = file_picker(stdscr)
-                    if file_path:
-                        values[0] = file_path
-                if current == 1:
-                    file_path = file_picker(stdscr)
-                    if file_path:
-                        values[1] = file_path
+                values[current] = values[current][:-1]
+            elif 32 <= key <= 126 and len(values[current]) < 60:
+                values[current] += chr(key)
+            elif key in [10, 13] and current in file_fields:
+                path = file_picker(stdscr)
+                if path:
+                    values[current] = path
         else:
             if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
                 selected_button = 1 - selected_button
             elif key in [10, 13]:
-                if selected_button == 0:
+                if selected_button == 0 and all(values[i] for i in visible_fields):
                     curses.noecho()
                     return {
-                        "encrypted": encrypted,
-                        "key_file": values[0].strip(),
-                        "cert_file": values[1].strip(),
-                        "password": values[2].strip(),
+                        labels[i].rstrip(':?#').lower().replace(' ', '_'): values[i].strip()
+                        for i in visible_fields
                     }
-                else:
-                    return None
+                return None
             elif key == curses.KEY_UP:
                 in_buttons = False
-
-        if key == 27:
-            return None
 
 def prompt_import_key_type(stdscr):
     key_types = ["PKCS #12", "PKCS #8", "PVK", "OpenSSL"]
@@ -483,6 +400,7 @@ def import_cert_file(stdscr, password):
     win.keypad(True)
     label = "Certificate file:"
     value = ""
+    options = ["Import", "Cancel"]
     selected_button = 0
     in_buttons = False
 
@@ -491,14 +409,14 @@ def import_cert_file(stdscr, password):
         win.addstr(2, 2, label)
         attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
         win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
-
         win.addstr(5, 2, " " * (win_width - 4))
-        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
-        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
 
-        win.addstr(6, 2, " Import ", import_attr)
-        win.addstr("   ")
-        win.addstr(" Cancel ", cancel_attr)
+        btn_y = win_height - 2
+        btn_x = (win_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
+        for i, btn in enumerate(options):
+            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
+            win.addstr(btn_y, btn_x, f" {btn} ", attr)
+            btn_x += len(btn) + BUTTON_SPACING
 
         win.refresh()
         key = win.getch()
@@ -635,6 +553,7 @@ def prompt_url_input(stdscr):
     win = curses.newwin(win_height, win_width, start_y, start_x)
     win.keypad(True)
     value = ""
+    options = ["Import", "Cancel"]
     selected_button = 0
     in_buttons = False
 
@@ -643,14 +562,14 @@ def prompt_url_input(stdscr):
         win.addstr(2, 2, "Hostname:Port (e.g. example.com:443):")
         attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
         win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
-
         win.addstr(5, 2, " " * (win_width - 4))
-        import_attr = curses.A_REVERSE if in_buttons and selected_button == 0 else curses.A_NORMAL
-        cancel_attr = curses.A_REVERSE if in_buttons and selected_button == 1 else curses.A_NORMAL
 
-        win.addstr(6, 2, " Import ", import_attr)
-        win.addstr("   ")
-        win.addstr(" Cancel ", cancel_attr)
+        btn_y = win_height - 2
+        btn_x = (win_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
+        for i, btn in enumerate(options):
+            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
+            win.addstr(btn_y, btn_x, f" {btn} ", attr)
+            btn_x += len(btn) + BUTTON_SPACING
 
         win.refresh()
         key = win.getch()
@@ -691,9 +610,12 @@ def delete_entry(password, alias):
     options = ["Yes", "No"]
     selected_option = 1
     while True:
-        for i, label in enumerate(options):
-            attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
-            confirm_win.addstr(6, 2 + i * 10, f" {label} ", attr)
+        btn_y = confirm_height - 2
+        btn_x = (confirm_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
+        for i, btn in enumerate(options):
+            attr = curses.A_REVERSE if selected_option == i else curses.color_pair(COLOR_PAIR_FIELD)
+            confirm_win.addstr(btn_y, btn_x, f" {btn} ", attr)
+            btn_x += len(btn) + BUTTON_SPACING
         confirm_win.refresh()
         ch = confirm_win.getch()
         if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
@@ -747,9 +669,12 @@ def save_changes(has_unsaved_changes):
     options = ["Yes", "No"]
     selected_option = 1
     while True:
-        for i, label in enumerate(options):
-            attr = curses.A_REVERSE if i == selected_option else curses.A_NORMAL
-            confirm_win.addstr(5, 2 + i * 10, f" {label} ", attr)
+        btn_y = confirm_height - 2
+        btn_x = (confirm_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
+        for i, btn in enumerate(options):
+            attr = curses.A_REVERSE if selected_option == i else curses.color_pair(COLOR_PAIR_FIELD)
+            confirm_win.addstr(btn_y, btn_x, f" {btn} ", attr)
+            btn_x += len(btn) + BUTTON_SPACING
         confirm_win.refresh()
         ch = confirm_win.getch()
         if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
@@ -831,7 +756,7 @@ def draw_menu_bar(active_menu, width):
         x += len(item) + 2
     bar_win.refresh()
 
-def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
+def draw_sub_menus(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
     submenus = {
         "Left": ["Search", "Filter"],
         "File": ["Open keystore", "Quit"],
@@ -1247,7 +1172,7 @@ def main(stdscr):
                         if x <= mx < x + item_len:
                             active_menu = i
                             draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                            menu_modal(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                            draw_sub_menus(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
                             break
                         x += item_len + 2
 
@@ -1336,14 +1261,37 @@ def main(stdscr):
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 choice = prompt_import_key_type(stdscr)
                 if choice == "PKCS #12":
-                    form_data = prompt_import_pkcs12_form(stdscr)
+                    form_data = import_form(
+                        stdscr,
+                        title="Import PKCS #12 Key Pair",
+                        labels=[
+                            "Key pair file:",
+                            "Decryption password:"
+                        ],
+                        file_fields=[0],
+                        masked_fields=[1]
+                    )
                     if form_data:
-                        alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_file"], form_data["password"])
+                        alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_pair_file"], form_data["decryption_password"])
                         entries = get_keystore_entries(KEYSTORE_PATH, password)
                         selected = find_entry_index_by_alias(entries, alias)
                         has_unsaved_changes = check_unsaved_changes()
                 elif choice == "PKCS #8":
-                    form_data = prompt_import_pkcs8_form(stdscr)
+                    form_data = import_form(
+                        stdscr,
+                        title="Import PKCS #8 Key Pair",
+                        labels=[
+                            "Certificates file:",
+                            "PKCS#8 key file:",
+                            "Encrypted key?",
+                            "Decryption password:"
+                        ],
+                        file_fields=[0, 1],
+                        masked_fields=[3],
+                        choice_fields=[2],
+                        dependencies={3: (2, "Yes")},  # Show password only if encrypted == yes
+                        choice_labels={2: ("Yes", "No")}
+                    )
                     if form_data:
                         alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
                         entries = get_keystore_entries(KEYSTORE_PATH, password)
@@ -1369,7 +1317,7 @@ def main(stdscr):
 
             elif key == curses.KEY_F9:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                menu_modal(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                draw_sub_menus(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
                 save_changes(has_unsaved_changes)
