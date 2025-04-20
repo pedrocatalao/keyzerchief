@@ -6,6 +6,9 @@ This is a terminal tool to manage Java keystores.
 
 * Navigate and see Keystore contents.
 * Switch panels (sides) with Tab key.
+* Micro dimming of inactive panel (side).
+* Highlighting of expired certificates on the left and expired date on the right panel.
+* Dimming of entire main UI when a popup window or menu is opened.
 * Scroll up/down with arrows.
 * Keyboard shortcuts b/t to go to bottom and top.
 * Mouse scrolling.
