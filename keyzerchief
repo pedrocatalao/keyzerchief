@@ -1213,7 +1213,6 @@ def main(stdscr):
                     alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password)
                 else:
                     alias = None
-
                 if alias:
                     entries = get_keystore_entries(KEYSTORE_PATH, password)
                     selected = find_entry_index_by_alias(entries, alias)
