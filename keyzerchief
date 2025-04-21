@@ -34,6 +34,9 @@ LOGO_X = 4
 LOGO_Y = 2
 
 # Colors
+COLOR_EXPIRED_RED = 196
+COLOR_EXPIRED_RED_DIM = 197
+# Pairs
 COLOR_PAIR_SELECTED = 1
 COLOR_PAIR_SELECTED_DIM = 2
 COLOR_PAIR_HEADER = 3
@@ -41,12 +44,13 @@ COLOR_PAIR_MENU = 4
 COLOR_PAIR_FKEYS = 5
 COLOR_PAIR_WHITE = 6
 COLOR_PAIR_WHITE_DIM = 7
-COLOR_PAIR_NAVY = 8
-COLOR_PAIR_EXPIRED = 9
-COLOR_PAIR_EXPIRED_DIM = 10
-COLOR_PAIR_DARK = 11
-COLOR_PAIR_DARKER = 12
-COLOR_PAIR_FIELD = 13
+COLOR_PAIR_CYAN = 8
+COLOR_PAIR_CYAN_DIM = 9
+COLOR_PAIR_EXPIRED = 10
+COLOR_PAIR_EXPIRED_DIM = 11
+COLOR_PAIR_DARK = 12
+COLOR_PAIR_DARKER = 13
+COLOR_PAIR_FIELD = 14
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -63,6 +67,8 @@ def init_curses():
     curses.curs_set(0)
     curses.start_color()
     curses.use_default_colors()
+    curses.init_color(COLOR_EXPIRED_RED, 600, 150, 150)
+    curses.init_color(COLOR_EXPIRED_RED_DIM, 500, 100, 100)
     curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
     curses.init_pair(COLOR_PAIR_SELECTED_DIM, curses.COLOR_BLACK, 73)
     curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
@@ -72,9 +78,10 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_WHITE_DIM, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_DARKER, 237, -1)
-    curses.init_pair(COLOR_PAIR_NAVY, 25, -1)
-    curses.init_pair(COLOR_PAIR_EXPIRED, 167, -1)
-    curses.init_pair(COLOR_PAIR_EXPIRED_DIM, 131, -1)
+    curses.init_pair(COLOR_PAIR_CYAN, 73, -1)
+    curses.init_pair(COLOR_PAIR_CYAN_DIM, 66, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED, COLOR_EXPIRED_RED, -1)
+    curses.init_pair(COLOR_PAIR_EXPIRED_DIM, COLOR_EXPIRED_RED_DIM, -1)
     curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
@@ -823,14 +830,6 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
 def prompt_password(win):
     win_y, win_x = win.getbegyx()
     while True:
-        curses.noecho()
-        title = "Keyzer Chief 0.9b"
-        for i in range(len(title)):
-            win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
-            win.refresh()
-            curses.napms(9)
-        win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_NAVY) | curses.A_ITALIC)
-        win.addstr(14, 22, "Keystore password:")
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
         keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
         keypad_win.keypad(True)
@@ -896,6 +895,14 @@ def intro_window(stdscr):
     box_x = (width - box_width) // 2
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
     popup_box(intro_win, "")
+    curses.noecho()
+    title = "Keyzer Chief 0.9b"
+    for i in range(len(title)):
+        intro_win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
+        intro_win.refresh()
+        curses.napms(9)
+    intro_win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_CYAN) | curses.A_ITALIC)
+    intro_win.addstr(14, 22, "Keystore password:")
     return intro_win
 
 def show_logo(win, final):
@@ -903,13 +910,13 @@ def show_logo(win, final):
     # Scramble effect before revealing
     if not final:
         temp_lines = [['█' if ch != ' ' else ' ' for ch in line] for line in logo_lines]
-        for idx, color in enumerate([234, 236, 58, 100, 136, 178]):
+        for idx, color in enumerate([236, 58, 100, 136, 178]):
             curses.init_pair(30 + idx, color, -1)
             for i, row in enumerate(temp_lines):
                 line = ''.join(random.choice('▓ ▒ ░ ▀') if ch != ' ' else ' ' for ch in row)
                 win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(30 + idx) | curses.A_DIM)
             win.refresh()
-            curses.napms(50)
+            curses.napms(35)
 
     # Final logo render
     for i, line in enumerate(logo_lines):
@@ -924,7 +931,7 @@ def fade_logo(win):
         for i, line in enumerate(logo_lines):
             win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(30 + idx) | curses.A_DIM)
         win.refresh()
-        curses.napms(100)
+        curses.napms(35)
         win.clear()
 
 def shake_logo(win):
@@ -936,7 +943,7 @@ def shake_logo(win):
         for i, line in enumerate(logo_lines):
             win.addstr(LOGO_Y + i, LOGO_X + shake, line, curses.color_pair(COLOR_PAIR_EXPIRED_DIM))
         win.refresh()
-        curses.napms(50)
+        curses.napms(35)
     show_logo(win, True)
 
 def draw_footer(stdscr, has_unsaved_changes):
@@ -1044,17 +1051,19 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
             break
         lines = [value[i:i+max_detail_width] for i in range(0, len(value), max_detail_width)]
         attr = curses.color_pair(COLOR_PAIR_WHITE if active_panel == RIGHT_PANEL else COLOR_PAIR_WHITE_DIM)
+        attrtit = curses.color_pair(COLOR_PAIR_CYAN if active_panel == RIGHT_PANEL else COLOR_PAIR_CYAN_DIM)
         attrexp = curses.color_pair(COLOR_PAIR_EXPIRED if active_panel == RIGHT_PANEL else COLOR_PAIR_EXPIRED_DIM)
 
         if dim:
             attr |= curses.A_DIM
+            attrtit |= curses.A_DIM
             attrexp |= curses.A_DIM
 
         stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
         if key == "Valid from" and entries[selected].get("__expired__") == True:
             stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attrexp)
         else:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attr)
+            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attrtit)
         line_num += 1
         for l in lines:
             if line_num >= height - 2:
