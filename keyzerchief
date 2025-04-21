@@ -39,18 +39,19 @@ COLOR_EXPIRED_RED_DIM = 197
 # Pairs
 COLOR_PAIR_SELECTED = 1
 COLOR_PAIR_SELECTED_DIM = 2
-COLOR_PAIR_HEADER = 3
-COLOR_PAIR_MENU = 4
-COLOR_PAIR_FKEYS = 5
-COLOR_PAIR_WHITE = 6
-COLOR_PAIR_WHITE_DIM = 7
-COLOR_PAIR_CYAN = 8
-COLOR_PAIR_CYAN_DIM = 9
-COLOR_PAIR_EXPIRED = 10
-COLOR_PAIR_EXPIRED_DIM = 11
-COLOR_PAIR_DARK = 12
-COLOR_PAIR_DARKER = 13
-COLOR_PAIR_FIELD = 14
+COLOR_PAIR_SELECTED_DIM_MORE = 3
+COLOR_PAIR_HEADER = 4
+COLOR_PAIR_MENU = 5
+COLOR_PAIR_FKEYS = 6
+COLOR_PAIR_WHITE = 7
+COLOR_PAIR_WHITE_DIM = 8
+COLOR_PAIR_CYAN = 9
+COLOR_PAIR_CYAN_DIM = 10
+COLOR_PAIR_EXPIRED = 11
+COLOR_PAIR_EXPIRED_DIM = 12
+COLOR_PAIR_DARK = 13
+COLOR_PAIR_DARKER = 14
+COLOR_PAIR_FIELD = 15
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -67,10 +68,11 @@ def init_curses():
     curses.curs_set(0)
     curses.start_color()
     curses.use_default_colors()
-    curses.init_color(COLOR_EXPIRED_RED, 600, 150, 150)
-    curses.init_color(COLOR_EXPIRED_RED_DIM, 500, 100, 100)
+    curses.init_color(COLOR_EXPIRED_RED, 750, 200, 200)
+    curses.init_color(COLOR_EXPIRED_RED_DIM, 600, 150, 150)
     curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
     curses.init_pair(COLOR_PAIR_SELECTED_DIM, curses.COLOR_BLACK, 73)
+    curses.init_pair(COLOR_PAIR_SELECTED_DIM_MORE, curses.COLOR_BLACK, 30)
     curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
     curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
     curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -78,8 +80,8 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_WHITE_DIM, curses.COLOR_WHITE, -1)
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_DARKER, 237, -1)
-    curses.init_pair(COLOR_PAIR_CYAN, 73, -1)
-    curses.init_pair(COLOR_PAIR_CYAN_DIM, 66, -1)
+    curses.init_pair(COLOR_PAIR_CYAN, 116, -1)
+    curses.init_pair(COLOR_PAIR_CYAN_DIM, 109, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED, COLOR_EXPIRED_RED, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED_DIM, COLOR_EXPIRED_RED_DIM, -1)
     curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
@@ -828,18 +830,22 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
             exit(0)
 
 def prompt_password(win):
+    import time
+
     win_y, win_x = win.getbegyx()
     while True:
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
         keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
         keypad_win.keypad(True)
-        keypad_win.move(0,0)
+        keypad_win.move(0, 0)
         win.refresh()
         curses.curs_set(1)
         password = ""
 
         while True:
             ch = keypad_win.getch()
+            subprocess.Popen(["afplay", "keystroke.mp3", "-v", "0.6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
             if ch in [10, 13]:  # Enter
                 if not check_password(KEYSTORE_PATH, password):
                     curses.curs_set(0)
@@ -847,7 +853,7 @@ def prompt_password(win):
                     shake_logo(win)
                     keypad_win.clear()
                     keypad_win.addstr(0, 0, " " * 24, curses.color_pair(COLOR_PAIR_FKEYS))
-                    keypad_win.move(0,0)
+                    keypad_win.move(0, 0)
                     curses.curs_set(1)
                 else:
                     curses.curs_set(0)
@@ -863,11 +869,20 @@ def prompt_password(win):
                     keypad_win.addch(0, len(password), ' ', curses.color_pair(COLOR_PAIR_FKEYS))
                     keypad_win.move(0, len(password))
             elif 32 <= ch <= 126:
-                if len(password)+1 > 24:
+                if len(password) + 1 > 24:
                     break
                 if len(password) < 30:
                     password += chr(ch)
-                    keypad_win.addch(0, len(password) - 1, '*', curses.color_pair(COLOR_PAIR_FKEYS))
+
+                    # Flash animation on character
+                    pos = len(password) - 1
+                    bright_attr = curses.color_pair(COLOR_PAIR_SELECTED) | curses.A_BOLD
+                    dim_attr = curses.color_pair(COLOR_PAIR_FKEYS)
+                    keypad_win.addch(0, pos, '*', bright_attr)
+                    keypad_win.refresh()
+                    time.sleep(0.075)
+                    keypad_win.addch(0, pos, '*', dim_attr)
+                    keypad_win.refresh()
 
 def get_logo_lines():
     ascii_art_base64 = 'H4sICJNV/WcAA2tleS1hbnNpLmFucwDjUgCCR9M6cCEuVFkFdOVc6JoxVGBThB/RWjleDyMU4VAGl0IPCDRhbOpoqAguBnc3FwAUPk4X3AEAAA=='
@@ -1020,14 +1035,20 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         is_expired = entries[i].get("__expired__", False)
         if active_panel == LEFT_PANEL:
             if i == selected:
-                attr = curses.color_pair(COLOR_PAIR_SELECTED)
+                if dim:
+                    attr = curses.color_pair(COLOR_PAIR_SELECTED_DIM_MORE)
+                else:
+                    attr = curses.color_pair(COLOR_PAIR_SELECTED)
             elif is_expired:
                 attr = curses.color_pair(COLOR_PAIR_EXPIRED)
             else:
                 attr = curses.color_pair(COLOR_PAIR_WHITE)
         else:
             if i == selected:
-                attr = curses.color_pair(COLOR_PAIR_SELECTED_DIM)
+                if dim:
+                    attr = curses.color_pair(COLOR_PAIR_SELECTED_DIM_MORE)
+                else:
+                    attr = curses.color_pair(COLOR_PAIR_SELECTED_DIM)
             elif is_expired:
                 attr = curses.color_pair(COLOR_PAIR_EXPIRED_DIM)
             else:
