@@ -92,11 +92,10 @@ def file_picker(stdscr, start_path="."):
     curses.curs_set(0)
     win = curses.newwin(win_height, win_width, start_y, start_x)
     win.keypad(True)
+    popup_box(win, f"Select a file: {current_path}")
 
     while True:
-        win.erase()
-        popup_box(win, f"Select a file: {current_path}")
-
+        clear_window(win)
         try:
             entries = os.listdir(current_path)
             entries.sort()
@@ -169,75 +168,7 @@ def file_picker(stdscr, start_path="."):
         elif selected_index >= scroll_offset + visible_height:
             scroll_offset = selected_index - visible_height + 1
 
-def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass, key_file, key_pass):
-    stdscr.clear()
-    stdscr.addstr(0, 2, "Importing key pair...", curses.A_BOLD)
-    stdscr.refresh()
-
-    alias = os.path.splitext(os.path.basename(key_file))[0]
-    cmd = [
-        "keytool", "-importkeystore",
-        "-srckeystore", key_file,
-        "-srcstoretype", "PKCS12",
-        "-destkeystore", keystore_path,
-        "-deststorepass", keystore_pass,
-        "-srcstorepass", key_pass,
-        "-alias", alias,
-        "-destalias", alias
-    ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    stdscr.clear()
-    if result.returncode == 0:
-        stdscr.addstr(2, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-        return alias
-    else:
-        stdscr.addstr(2, 2, "Import failed:", curses.A_BOLD)
-        stdscr.addstr(4, 2, result.stderr.strip())
-    stdscr.addstr(6, 2, "Press any key to continue.")
-    stdscr.refresh()
-    stdscr.getch()
-
-def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass, form_data):
-    alias = os.path.splitext(os.path.basename(form_data['pkcs8_key_file']))[0]
-
-    pkcs8_cmd = [
-        "openssl", "pkcs8",
-        "-topk8",
-        "-inform", "PEM",
-        "-outform", "PEM",
-        "-in", form_data['pkcs8_key_file'],
-        "-passin", f"pass:{form_data['decryption_password']}" if form_data['encrypted_key'] else "pass:",
-        "-out", "/tmp/converted_pkcs8.key"
-    ]
-
-    cmd = [
-        "keytool", "-importcert",
-        "-keystore", keystore_path,
-        "-storepass", keystore_pass,
-        "-alias", alias,
-        "-file", form_data['certificates_file'],
-        "-keypass", form_data['decryption_password'] if form_data['encrypted_key'] else keystore_pass
-    ]
-
-    # Run OpenSSL to convert key
-    openssl_result = subprocess.run(pkcs8_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    stdscr.clear()
-    if openssl_result.returncode != 0:
-        stdscr.addstr(0, 2, "OpenSSL conversion failed:", curses.A_BOLD)
-        stdscr.addstr(2, 2, openssl_result.stderr.strip())
-    else:
-        keytool_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if keytool_result.returncode == 0:
-            stdscr.addstr(0, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-            return alias
-        else:
-            stdscr.addstr(0, 2, "Import failed:", curses.A_BOLD)
-            stdscr.addstr(2, 2, keytool_result.stderr.strip())
-    stdscr.addstr(4, 2, "Press any key to continue.")
-    stdscr.refresh()
-    stdscr.getch()
-
-def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, choice_fields=None, dependencies=None, choice_labels=None):
+def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choice_fields=None, dependencies=None, choice_labels=None, default_values=None, placeholder_values=None):
     height, width = stdscr.getmaxyx()
     win_width = 75
     win_height = 2 * len(labels) + 6
@@ -250,8 +181,13 @@ def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, cho
     choice_fields = choice_fields or []
     dependencies = dependencies or {}
     choice_labels = choice_labels or {i: ("Yes", "No") for i in choice_fields}
+    default_values = default_values or {}
+    placeholder_values = placeholder_values or {}
 
-    values = [choice_labels[i][0] if i in choice_fields else "" for i in range(len(labels))]
+    values = [
+        default_values.get(i, choice_labels[i][0] if i in choice_fields else "")
+        for i in range(len(labels))
+    ]
     current = 0
     selected_button = 0
     in_buttons = False
@@ -294,10 +230,21 @@ def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, cho
                     win.addstr(y, x, f" {opt} ", attr)
                     x += len(opt) + 3
             else:
-                attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
                 val = values[i] if i not in masked_fields else '*' * len(values[i])
+
+                placeholder = placeholder_values.get(i)
+                if not placeholder and i in file_fields:
+                    placeholder = "Type path or press enter to browse"
+
+                if is_selected and not values[i] and placeholder:
+                    display_val = placeholder
+                    attr = curses.A_REVERSE | curses.A_DIM
+                else:
+                    display_val = val
+                    attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
+
                 win.addstr(y, field_start_x - len(label) + 2, label)
-                win.addstr(y, field_start_x + 3, val.ljust(win_width - field_start_x - 5), attr)
+                win.addstr(y, field_start_x + 3, display_val.ljust(win_width - field_start_x - 5), attr)
 
         btn_y = win_height - 2
         btn_x = (win_width - sum(len(b) for b in buttons) - BUTTON_SPACING) // 2
@@ -321,7 +268,7 @@ def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, cho
         key = win.getch()
 
         if key == 27:
-            return None
+            return None, win
 
         if not in_buttons:
             if key == curses.KEY_UP:
@@ -359,10 +306,16 @@ def import_form(stdscr, title, labels, file_fields=None, masked_fields=None, cho
                     return {
                         labels[i].rstrip(':?#').lower().replace(' ', '_'): values[i].strip()
                         for i in visible_fields
-                    }
-                return None
+                    }, win
+                return None, win
             elif key == curses.KEY_UP:
                 in_buttons = False
+
+def clear_window(win):
+    height, width = win.getmaxyx()
+    for y in range(1, height - 1):
+        win.move(y, 1)
+        win.addstr(y, 1, " " * (width - 2))
 
 def prompt_import_key_type(stdscr):
     key_types = ["PKCS #12", "PKCS #8", "PVK", "OpenSSL"]
@@ -389,107 +342,167 @@ def prompt_import_key_type(stdscr):
         elif key in [27]:
             return None
 
-def import_cert_file(stdscr, password):
-    height, width = stdscr.getmaxyx()
-    win_width = 60
-    win_height = 8
-    start_y = (height - win_height) // 2
-    start_x = (width - win_width) // 2
+def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
+    form_data, win = popup_form(
+        stdscr,
+        title="Import PKCS #12 Key Pair",
+        labels=[
+            "Key pair file:",
+            "Decryption password:"
+        ],
+        file_fields=[0],
+        masked_fields=[1]
+    )
 
-    win = curses.newwin(win_height, win_width, start_y, start_x)
-    win.keypad(True)
-    label = "Certificate file:"
-    value = ""
-    options = ["Import", "Cancel"]
-    selected_button = 0
-    in_buttons = False
-
-    while True:
-        popup_box(win, "Import Certificate File")
-        win.addstr(2, 2, label)
-        attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
-        win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
-        win.addstr(5, 2, " " * (win_width - 4))
-
-        btn_y = win_height - 2
-        btn_x = (win_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
-        for i, btn in enumerate(options):
-            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
-            win.addstr(btn_y, btn_x, f" {btn} ", attr)
-            btn_x += len(btn) + BUTTON_SPACING
-
-        win.refresh()
-        key = win.getch()
-
-        if not in_buttons:
-            if key in [10, 13]:
-                file_path = file_picker(stdscr)
-                if file_path:
-                    value = file_path
-            elif key == curses.KEY_DOWN:
-                in_buttons = True
-                selected_button = 0
-            elif key in [curses.KEY_BACKSPACE, 127, 8]:
-                value = value[:-1]
-            elif 32 <= key <= 126:
-                if len(value) < win_width - 4:
-                    value += chr(key)
-        else:
-            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
-                selected_button = 1 - selected_button
-            elif key in [10, 13]:
-                if selected_button == 0 and value.strip() and os.path.isfile(value.strip()):
-                    cert_file = value.strip()
-                    alias = os.path.splitext(os.path.basename(cert_file))[0]
-                    import_cmd = [
-                        "keytool", "-importcert",
-                        "-alias", alias,
-                        "-keystore", KEYSTORE_PATH,
-                        "-storepass", password,
-                        "-file", cert_file,
-                        "-noprompt"
-                    ]
-                    win.erase()
-                    popup_box(win, "Import Certificate File")
-                    win.addstr(2, 2, f"Importing {cert_file}...", curses.A_BOLD)
-                    win.refresh()
-                    result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    if result.returncode == 0:
-                        win.addstr(4, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-                        win.addstr(6, 2, "Press any key to continue.")
-                        win.refresh()
-                        win.getch()
-                        return alias
-                    else:
-                        win.addstr(4, 2, "Import failed:", curses.A_BOLD)
-                        win.addstr(6, 2, result.stderr.strip())
-                        win.addstr(8, 2, "Press any key to continue.")
-                        win.refresh()
-                        win.getch()
-                        return None
-                else:
-                    return None
-            elif key == curses.KEY_UP:
-                in_buttons = False
-        if key == 27:
-            return None
-
-def import_cert_from_url(stdscr, password):
-    url = prompt_url_input(stdscr)
-    if not url:
+    if form_data is None or "key_pair_file" not in form_data:
         return None
 
-    height, width = stdscr.getmaxyx()
-    win_width = 60
-    win_height = 9
-    start_y = (height - win_height) // 2
-    start_x = (width - win_width) // 2
-    win = curses.newwin(win_height, win_width, start_y, start_x)
-    popup_box(win, "Import SSL Certificate from URL")
-    win.addstr(2, 2, f"Fetching certificate from {url}...")
-    win.refresh()
+    win_height, win_width = win.getmaxyx()
+    clear_window(win)
+    win.addstr(2, 2, "Importing key pair...", curses.A_BOLD)
 
+    alias = os.path.splitext(os.path.basename(form_data['key_pair_file']))[0]
+    cmd = [
+        "keytool", "-importkeystore",
+        "-srckeystore", form_data['key_pair_file'],
+        "-srcstoretype", "PKCS12",
+        "-destkeystore", keystore_path,
+        "-deststorepass", keystore_pass,
+        "-srcstorepass", form_data['decryption_password'],
+        "-alias", alias,
+        "-destalias", alias
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    if result.returncode == 0:
+        win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+        return alias
+    else:
+        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+        win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
+    win.addstr(win_height - 3, 2, "Press any key to continue.")
+    win.refresh()
+    win.getch()
+
+def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
+    form_data, win = popup_form(
+        stdscr,
+        title="Import PKCS #8 Key Pair",
+        labels=[
+            "Certificates file:",
+            "PKCS#8 key file:",
+            "Encrypted key?",
+            "Decryption password:"
+        ],
+        file_fields=[0, 1],
+        masked_fields=[3],
+        choice_fields=[2],
+        dependencies={3: (2, "Yes")},  # Show password only if encrypted == yes
+        choice_labels={2: ("Yes", "No")}
+    )
+
+    if form_data is None or "certificates_file" not in form_data:
+        return None
+
+    win_height, win_width = win.getmaxyx()
+    clear_window(win)
+    win.addstr(2, 2, "Importing key pair...", curses.A_BOLD)
+
+    alias = os.path.splitext(os.path.basename(form_data['pkcs8_key_file']))[0]
+
+    pkcs8_cmd = [
+        "openssl", "pkcs8",
+        "-topk8",
+        "-inform", "PEM",
+        "-outform", "PEM",
+        "-in", form_data['pkcs8_key_file'],
+        "-passin", f"pass:{form_data['decryption_password']}" if form_data['encrypted_key'] else "pass:",
+        "-out", "/tmp/converted_pkcs8.key"
+    ]
+
+    cmd = [
+        "keytool", "-importcert",
+        "-keystore", keystore_path,
+        "-storepass", keystore_pass,
+        "-alias", alias,
+        "-file", form_data['certificates_file'],
+        "-keypass", form_data['decryption_password'] if form_data['encrypted_key'] else keystore_pass
+    ]
+
+    # Run OpenSSL to convert key
+    openssl_result = subprocess.run(pkcs8_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if openssl_result.returncode != 0:
+        win.addstr(3, 2, "OpenSSL conversion failed:", curses.A_BOLD)
+        win.addstr(4, 2, openssl_result.stdout.strip()[:win_width - 4])
+    else:
+        keytool_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if keytool_result.returncode == 0:
+            win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+            return alias
+        else:
+            win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+            win.addstr(4, 2, keytool_result.stderr.strip())
+    win.addstr(win_height - 3, 2, "Press any key to continue.")
+    win.refresh()
+    win.getch()
+
+def import_cert_file(stdscr, password):
+    form_data, win = popup_form(
+        stdscr,
+        title="Import Certificate from file",
+        labels=["File path:"],
+        file_fields=[0]
+    )
+
+    if form_data is None or "file_path" not in form_data:
+        return None
+
+    win_height, win_width = win.getmaxyx()
+
+    cert_file = form_data["file_path"]
+    alias = os.path.splitext(os.path.basename(cert_file))[0]
+    import_cmd = [
+        "keytool", "-importcert",
+        "-alias", alias,
+        "-keystore", KEYSTORE_PATH,
+        "-storepass", password,
+        "-file", cert_file,
+        "-noprompt"
+    ]
+    clear_window(win)
+    win.addstr(2, 2, f"Importing {cert_file}...", curses.A_BOLD)
+    win.refresh()
+    result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode == 0:
+        win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+        win.addstr(win_height - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+        return alias
+    else:
+        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+        win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
+        win.addstr(win_height - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+        return None
+
+def import_cert_from_url(stdscr, password):
+    form_data, win = popup_form(
+                    stdscr,
+                    title="Import SSL Certificate from URL",
+                    labels=["Url:"],
+                    placeholder_values={0: "example:443"}
+                )
+
+    if form_data is None or "url" not in form_data:
+        return None
+
+    url = form_data["url"]
+    win_height, win_width = win.getmaxyx()
     try:
+        clear_window(win)
+        win.addstr(2, 2, f"Fetching certificate from {url}...")
         if url.startswith("https://") or url.startswith("http://"):
             url = url.split("://", 1)[1]
 
@@ -524,79 +537,19 @@ def import_cert_from_url(stdscr, password):
             "-noprompt"
         ]
         result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        win.erase()
-        popup_box(win, "Import SSL Certificate from URL")
         if result.returncode == 0:
-            win.addstr(2, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
+            win.addstr(3, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
         else:
-            win.addstr(2, 2, "Import failed:", curses.A_BOLD)
-            win.addstr(3, 2, result.stderr.strip()[:win_width - 4])
+            win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+            win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
     except Exception as e:
-        popup_box(win, "Import SSL Certificate from URL")
-        win.erase()
-        win.addstr(2, 2, f"Error: {str(e)}", curses.A_BOLD)
+        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+        win.addstr(4, 2, f"Error: {str(e)}", curses.A_BOLD)
 
-    win.addstr(win_height - 4, 2, "Press any key to continue.")
+    win.addstr(win_height - 3, 2, "Press any key to continue.")
     win.refresh()
     win.getch()
     return alias if 'alias' in locals() else None
-
-def prompt_url_input(stdscr):
-    curses.noecho()
-    curses.curs_set(0)
-    height, width = stdscr.getmaxyx()
-    win_width = 60
-    win_height = 8
-    start_y = (height - win_height) // 2
-    start_x = (width - win_width) // 2
-
-    win = curses.newwin(win_height, win_width, start_y, start_x)
-    win.keypad(True)
-    value = ""
-    options = ["Import", "Cancel"]
-    selected_button = 0
-    in_buttons = False
-
-    while True:
-        popup_box(win, "Import SSL Certificate from URL")
-        win.addstr(2, 2, "Hostname:Port (e.g. example.com:443):")
-        attr = curses.A_REVERSE if not in_buttons else curses.color_pair(COLOR_PAIR_FIELD)
-        win.addstr(3, 2, value[-(win_width - 4):].ljust(win_width - 4), attr)
-        win.addstr(5, 2, " " * (win_width - 4))
-
-        btn_y = win_height - 2
-        btn_x = (win_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
-        for i, btn in enumerate(options):
-            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
-            win.addstr(btn_y, btn_x, f" {btn} ", attr)
-            btn_x += len(btn) + BUTTON_SPACING
-
-        win.refresh()
-        key = win.getch()
-
-        if not in_buttons:
-            if key == curses.KEY_DOWN:
-                in_buttons = True
-                selected_button = 0
-            elif key in [10, 13]:
-                return value.strip() if value else None
-            elif key in [curses.KEY_BACKSPACE, 127, 8]:
-                value = value[:-1]
-            elif 32 <= key <= 126:
-                if len(value) < win_width - 4:
-                    value += chr(key)
-        else:
-            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
-                selected_button = 1 - selected_button
-            elif key in [10, 13]:
-                if selected_button == 0 and value.strip():
-                    return value.strip() if value else None
-                else:
-                    return None
-            elif key == curses.KEY_UP:
-                in_buttons = False
-        if key == 27:
-            return None
 
 def delete_entry(password, alias):
     confirm_height, confirm_width = 8, 60
@@ -927,6 +880,7 @@ def popup_box(win, title):
     esc_label = "─┤esc├─"
     height, width = win.getmaxyx()
     label_x = width - len(esc_label) - 1
+    win.erase()
     win.attron(curses.color_pair(COLOR_PAIR_DARKER))
     win.box()
     win.addstr(0, max(2, (width - len(title)) // 2), f"{title[:width - 4]}", curses.color_pair(COLOR_PAIR_MENU))
@@ -1253,57 +1207,33 @@ def main(stdscr):
             if key == curses.KEY_F3:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = import_cert_file(stdscr, password)
-                entries = get_keystore_entries(KEYSTORE_PATH, password)
-                selected = find_entry_index_by_alias(entries, alias)
-                has_unsaved_changes = check_unsaved_changes()
+                if alias:
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F4:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 choice = prompt_import_key_type(stdscr)
                 if choice == "PKCS #12":
-                    form_data = import_form(
-                        stdscr,
-                        title="Import PKCS #12 Key Pair",
-                        labels=[
-                            "Key pair file:",
-                            "Decryption password:"
-                        ],
-                        file_fields=[0],
-                        masked_fields=[1]
-                    )
-                    if form_data:
-                        alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password, form_data["key_pair_file"], form_data["decryption_password"])
-                        entries = get_keystore_entries(KEYSTORE_PATH, password)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        has_unsaved_changes = check_unsaved_changes()
+                    alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password)
                 elif choice == "PKCS #8":
-                    form_data = import_form(
-                        stdscr,
-                        title="Import PKCS #8 Key Pair",
-                        labels=[
-                            "Certificates file:",
-                            "PKCS#8 key file:",
-                            "Encrypted key?",
-                            "Decryption password:"
-                        ],
-                        file_fields=[0, 1],
-                        masked_fields=[3],
-                        choice_fields=[2],
-                        dependencies={3: (2, "Yes")},  # Show password only if encrypted == yes
-                        choice_labels={2: ("Yes", "No")}
-                    )
-                    if form_data:
-                        alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password, form_data)
-                        entries = get_keystore_entries(KEYSTORE_PATH, password)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        has_unsaved_changes = check_unsaved_changes()
+                    alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password)
+                else:
+                    alias = None
+
+                if alias:
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F5:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = import_cert_from_url(stdscr, password)
-                entries = get_keystore_entries(KEYSTORE_PATH, password)
-                selected = find_entry_index_by_alias(entries, alias)
-                has_unsaved_changes = check_unsaved_changes()
+                if alias:
+                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    has_unsaved_changes = check_unsaved_changes()
 
             elif key == curses.KEY_F7:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
