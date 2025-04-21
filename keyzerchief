@@ -709,7 +709,7 @@ def draw_menu_bar(active_menu, width):
         x += len(item) + 2
     bar_win.refresh()
 
-def draw_sub_menus(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
+def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
     submenus = {
         "Left": ["Search", "Filter"],
         "File": ["Open keystore", "Quit"],
@@ -1025,18 +1025,16 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
                 attr = curses.color_pair(COLOR_PAIR_EXPIRED_DIM)
             else:
                 attr = curses.color_pair(COLOR_PAIR_WHITE_DIM)
-        stdscr.move(y_pos, 1)
-        stdscr.clrtoeol()
 
         if dim:
             attr |= curses.A_DIM
 
+        stdscr.addstr(y_pos, 2, " " * (panel_width - 4))
         stdscr.addstr(y_pos, 2, alias[:panel_width - 4], attr)
 
     # Clear remaining left panel rows
     for y in range(2 + len(entries) - scroll_offset, height - 2):
-        stdscr.move(y, 1)
-        stdscr.clrtoeol()
+        stdscr.addstr(y, 2, " " * (panel_width - 4))
 
     # Right panel details
     detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
@@ -1068,12 +1066,6 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     # Clear remaining right panel rows
     for y in range(line_num, height - 2):
         stdscr.addstr(y, panel_width + 2, " " * (width - panel_width - 3))
-
-    # Restore  vertical lines that may have been cleared
-    for y in range(2, height - 2):
-        stdscr.addch(y, panel_width - 1, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width, curses.ACS_VLINE)
-        stdscr.addch(y, panel_width * 2, curses.ACS_VLINE)
 
     stdscr.move(0, 0)
     stdscr.refresh()
@@ -1126,7 +1118,7 @@ def main(stdscr):
                         if x <= mx < x + item_len:
                             active_menu = i
                             draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                            draw_sub_menus(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                            menu_modal(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
                             break
                         x += item_len + 2
 
@@ -1247,7 +1239,7 @@ def main(stdscr):
 
             elif key == curses.KEY_F9:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                draw_sub_menus(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                menu_modal(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
                 save_changes(has_unsaved_changes)
