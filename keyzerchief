@@ -1059,7 +1059,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         for l in lines:
             if line_num >= height - 2:
                 break
-            stdscr.addstr(line_num, panel_width + 4, " " * (width - panel_width - 5))
+            stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
             stdscr.addstr(line_num, panel_width + 4, l, attr)
             line_num += 1
 
