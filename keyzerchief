@@ -1108,7 +1108,7 @@ def intro_window(stdscr):
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
     popup_box(intro_win, "")
     curses.noecho()
-    title = "Keyzer Chief 0.9b"
+    title = "Keyzer Chief 1.6"
     for i in range(len(title)):
         intro_win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
         intro_win.refresh()
