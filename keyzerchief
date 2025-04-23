@@ -12,23 +12,19 @@ import random
 import time
 import signal
 import tempfile
+from types import SimpleNamespace
 from io import BytesIO
 from datetime import datetime
 from datetime import datetime, timezone
 
-# Config from argument
-if len(sys.argv) < 2:
-    print("Usage: keystoreterm <keystore-file>")
-    sys.exit(1)
+# Keystores (original and working/backup file)
+global RELOAD_ENTRIES, KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH, KEYSTORE_PWD, HAS_UNSAVED_CHANGES
+ORIGINAL_KEYSTORE_PATH = ""
+KEYSTORE_PATH = ""
+KEYSTORE_PWD = ""
+RELOAD_ENTRIES = True
+HAS_UNSAVED_CHANGES = False
 
-ORIGINAL_KEYSTORE_PATH = sys.argv[1]
-if not os.path.isfile(ORIGINAL_KEYSTORE_PATH):
-    print(f"File not found: {ORIGINAL_KEYSTORE_PATH}")
-    sys.exit(1)
-
-KEYSTORE_COPY_PATH = tempfile.NamedTemporaryFile(delete=False, suffix=".jks").name
-KEYSTORE_PATH = KEYSTORE_COPY_PATH
-shutil.copyfile(ORIGINAL_KEYSTORE_PATH, KEYSTORE_COPY_PATH)
 
 # Logo position
 LOGO_X = 4
@@ -385,7 +381,7 @@ def handle_import_result(alias, result, win):
         win.getch()
         return None
 
-def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
+def import_pkcs12_keypair(stdscr):
     form_data, win = popup_form(
         stdscr,
         title="Import PKCS #12 Key Pair",
@@ -408,8 +404,8 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
         "keytool", "-importkeystore",
         "-srckeystore", form_data['key_pair_file'],
         "-srcstoretype", "PKCS12",
-        "-destkeystore", keystore_path,
-        "-deststorepass", keystore_pass,
+        "-destkeystore", KEYSTORE_PATH,
+        "-deststorepass", KEYSTORE_PWD,
         "-srcstorepass", form_data['decryption_password'],
         "-alias", alias,
         "-destalias", alias
@@ -417,7 +413,7 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return handle_import_result(alias, result, win)
 
-def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
+def import_pkcs8_keypair(stdscr):
     form_data, win = popup_form(
         stdscr,
         title="Import PKCS #8 Key Pair",
@@ -453,7 +449,7 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
         "-inkey", form_data['pkcs8_key_file'],
         "-out", p12_path,
         "-name", alias,
-        "-passout", f"pass:{keystore_pass}"
+        "-passout", f"pass:{KEYSTORE_PWD}"
     ]
 
     if form_data is not None and "decryption_password" in form_data:
@@ -461,12 +457,12 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
 
     keytool_cmd = [
         "keytool", "-importkeystore",
-        "-deststorepass", keystore_pass,
-        "-destkeypass", keystore_pass,
-        "-destkeystore", keystore_path,
+        "-deststorepass", KEYSTORE_PWD,
+        "-destkeypass", KEYSTORE_PWD,
+        "-destkeystore", KEYSTORE_PATH,
         "-srckeystore", p12_path,
         "-srcstoretype", "PKCS12",
-        "-srcstorepass", keystore_pass,
+        "-srcstorepass", KEYSTORE_PWD,
         "-alias", alias,
         "-noprompt"
     ]
@@ -484,7 +480,7 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
         if os.path.exists(p12_path):
             os.remove(p12_path)
 
-def import_cert_file(stdscr, password):
+def import_cert_file(stdscr):
     form_data, win = popup_form(
         stdscr,
         title="Import Certificate from file",
@@ -501,7 +497,7 @@ def import_cert_file(stdscr, password):
         "keytool", "-importcert",
         "-alias", alias,
         "-keystore", KEYSTORE_PATH,
-        "-storepass", password,
+        "-storepass", KEYSTORE_PWD,
         "-file", cert_file,
         "-noprompt"
     ]
@@ -511,7 +507,7 @@ def import_cert_file(stdscr, password):
     result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return handle_import_result(alias, result, win)
 
-def import_cert_from_url(stdscr, password):
+def import_cert_from_url(stdscr):
     form_data, win = popup_form(
                     stdscr,
                     title="Import SSL Certificate from URL",
@@ -554,14 +550,14 @@ def import_cert_from_url(stdscr, password):
         "keytool", "-importcert",
         "-alias", alias,
         "-keystore", KEYSTORE_PATH,
-        "-storepass", password,
+        "-storepass", KEYSTORE_PWD,
         "-file", cert_path,
         "-noprompt"
     ]
     result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return handle_import_result(alias, result, win)
 
-def delete_entry(password, alias):
+def delete_entry(alias):
     confirm_height, confirm_width = 8, 60
     confirm_y = (curses.LINES - confirm_height) // 2
     confirm_x = (curses.COLS - confirm_width) // 2
@@ -585,7 +581,7 @@ def delete_entry(password, alias):
             selected_option = 1 - selected_option
         elif ch in [10, 13]:
             if selected_option == 0:
-                delete_cmd = ["keytool", "-delete", "-alias", alias, "-keystore", KEYSTORE_PATH, "-storepass", password]
+                delete_cmd = ["keytool", "-delete", "-alias", alias, "-keystore", KEYSTORE_PATH, "-storepass", KEYSTORE_PWD]
                 result = subprocess.run(delete_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if result.returncode == 0:
                     return check_unsaved_changes()
@@ -612,48 +608,46 @@ def check_password(keystore_path, password):
         return False
 
 def check_unsaved_changes():
-    try:
-        with open(ORIGINAL_KEYSTORE_PATH, 'rb') as f1, open(KEYSTORE_PATH, 'rb') as f2:
-            return f1.read() != f2.read()
-    except Exception:
-        return True
+    global HAS_UNSAVED_CHANGES
+    with open(ORIGINAL_KEYSTORE_PATH, 'rb') as file1, open(KEYSTORE_PATH, 'rb') as file2:
+        HAS_UNSAVED_CHANGES = file1.read() != file2.read()
 
-def save_changes(has_unsaved_changes):
-    if not has_unsaved_changes:
-        return False
-
-    confirm_height, confirm_width = 7, 50
-    confirm_y = (curses.LINES - confirm_height) // 2
-    confirm_x = (curses.COLS - confirm_width) // 2
-    confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
-    confirm_win.keypad(True)
-    popup_box(confirm_win, "Save changes?")
-    confirm_win.addstr(2, 2, "Overwrite the original keystore?")
-    options = ["Yes", "No"]
-    selected_option = 1
-    while True:
-        btn_y = confirm_height - 2
-        btn_x = (confirm_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
-        for i, btn in enumerate(options):
-            attr = curses.A_REVERSE if selected_option == i else curses.color_pair(COLOR_PAIR_FIELD)
-            confirm_win.addstr(btn_y, btn_x, f" {btn} ", attr)
-            btn_x += len(btn) + BUTTON_SPACING
-        confirm_win.refresh()
-        ch = confirm_win.getch()
-        if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
-            selected_option = (selected_option + 1) % len(options)
-        elif ch in [10, 13]:
-            if selected_option == 0:
-                shutil.copyfile(KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH)
-                confirm_win.addstr(5, 2, "Saving:")
-                for i in range(30):
-                    confirm_win.addstr(5, 10 + i, "█")
-                    confirm_win.refresh()
-                    curses.napms(20)
-                return False
-            return True
-        elif ch in [27]:
-            return True
+def save_changes():
+    global HAS_UNSAVED_CHANGES
+    if HAS_UNSAVED_CHANGES:
+        confirm_height, confirm_width = 7, 50
+        confirm_y = (curses.LINES - confirm_height) // 2
+        confirm_x = (curses.COLS - confirm_width) // 2
+        confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
+        confirm_win.keypad(True)
+        popup_box(confirm_win, "Save changes?")
+        confirm_win.addstr(2, 2, "Overwrite the original keystore?")
+        options = ["Yes", "No"]
+        selected_option = 1
+        while True:
+            btn_y = confirm_height - 2
+            btn_x = (confirm_width - sum(len(b) for b in options) - BUTTON_SPACING) // 2
+            for i, btn in enumerate(options):
+                attr = curses.A_REVERSE if selected_option == i else curses.color_pair(COLOR_PAIR_FIELD)
+                confirm_win.addstr(btn_y, btn_x, f" {btn} ", attr)
+                btn_x += len(btn) + BUTTON_SPACING
+            confirm_win.refresh()
+            ch = confirm_win.getch()
+            if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+                selected_option = (selected_option + 1) % len(options)
+            elif ch in [10, 13]:
+                if selected_option == 0:
+                    shutil.copyfile(KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH)
+                    confirm_win.addstr(5, 2, "Saving:")
+                    for i in range(30):
+                        confirm_win.addstr(5, 10 + i, "█")
+                        confirm_win.refresh()
+                        curses.napms(20)
+                    HAS_UNSAVED_CHANGES = False
+                    break
+                break
+            elif ch in [27]:
+                break
 
 def filter_entries(entries):
     filtered = []
@@ -683,8 +677,8 @@ def filter_entries(entries):
         filtered.append(entry)
     return filtered
 
-def get_keystore_entries(path, password):
-    cmd = ["keytool", "-list", "-v", "-keystore", path, "-storepass", password]
+def get_keystore_entries():
+    cmd = ["keytool", "-list", "-v", "-keystore", KEYSTORE_PATH, "-storepass", KEYSTORE_PWD]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         raise Exception("Failed to load keystore:\n" + result.stderr)
@@ -747,7 +741,7 @@ def draw_menu_bar(active_menu, width):
         x += len(item) + 2
     bar_win.refresh()
 
-def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
+def menu_modal(stdscr, active_menu=0, redraw_main_ui=None):
     submenus = {
         "Left": ["Filter"],
         "File": ["Open keystore", "Quit"],
@@ -784,31 +778,6 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
         if form_data:
             FILTER_STATE.update(form_data)
             RELOAD_ENTRIES = True
-
-    def handle_open_keystore(stdscr):
-        global KEYSTORE_PATH, password, RELOAD_ENTRIES
-
-        KEYSTORE_PATH = file_picker(stdscr, ".", "Select a Keystore:", [".jks"])
-
-        if not KEYSTORE_PATH:
-            return
-
-        try:
-            intro_win = intro_window(stdscr)
-            show_logo(intro_win, False)
-
-            if not check_password(KEYSTORE_PATH, password=""):
-                password = prompt_password(intro_win)
-            else:
-                fade_logo(intro_win)
-
-            RELOAD_ENTRIES = True
-
-        except Exception as e:
-            stdscr.clear()
-            stdscr.addstr(2, 2, f"Failed to open keystore: {e}")
-            stdscr.refresh()
-            stdscr.getch()
 
     def handle_toggle_mouse():
         global MOUSE_ENABLED
@@ -904,20 +873,18 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
                         selected_label = items[selected_index]
                         submenu_win.clear()
                         submenu_win.refresh()
+                        redraw_main_ui()
                         if selected_label == "Filter":
                             handle_filter_popup()
                         elif selected_label == "Open keystore":
-                            handle_open_keystore(stdscr)
+                            open_keystore(stdscr, None)
                         elif selected_label == "Quit":
-                            save_changes(has_unsaved_changes)
+                            save_changes()
                             exit(0)
                         elif selected_label == "Enable/Disable mouse":
                             handle_toggle_mouse()
                         elif selected_label == "Search content":
                             handle_search_content(stdscr)
-                        else:
-                            stdscr.addstr(3, 2, f"Selected menu: {selected_label}   ")
-                            stdscr.refresh()
                 break
 
         if key == curses.KEY_LEFT:
@@ -962,19 +929,31 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
         elif key in [10, 13] and selected_index is not None:
             selected_label = submenus[MENU_ITEMS[active_menu]][selected_index]
             if selected_label == "Filter":
+                submenu_win.clear()
+                draw_menu_bar(None, width)
+                redraw_main_ui()
                 handle_filter_popup()
             elif selected_label == "Open keystore":
-                handle_open_keystore(stdscr)
+                submenu_win.clear()
+                draw_menu_bar(None, width)
+                redraw_main_ui()
+                open_keystore(stdscr, None)
             elif selected_label == "Quit":
-                save_changes(has_unsaved_changes)
+                submenu_win.clear()
+                draw_menu_bar(None, width)
+                redraw_main_ui()
+                save_changes()
                 exit(0)
             elif selected_label == "Enable/Disable mouse":
+                submenu_win.clear()
+                draw_menu_bar(None, width)
+                redraw_main_ui()
                 handle_toggle_mouse()
             elif selected_label == "Search content":
-                handle_search_content(stdscr)
-            if submenu_win:
                 submenu_win.clear()
-                submenu_win.refresh()
+                draw_menu_bar(None, width)
+                redraw_main_ui()
+                handle_search_content(stdscr)
             return None, None
 
         elif key in [curses.KEY_F9, 27]:  # ESC
@@ -984,12 +963,52 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
             return None, None
 
         elif key == curses.KEY_F10:
-            save_changes(has_unsaved_changes)
+            save_changes()
             exit(0)
 
-def prompt_password(win):
-    import time
+def open_keystore(stdscr, keystore_path):
+    global KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH, KEYSTORE_PWD, RELOAD_ENTRIES, HAS_UNSAVED_CHANGES
+    prev_keystore_path = None
+    if KEYSTORE_PATH != "":
+        prev_keystore_path = KEYSTORE_PATH
+        save_changes()
 
+    KEYSTORE_PATH = ""
+
+    if keystore_path is None or not os.path.isfile(keystore_path):
+        KEYSTORE_PATH = file_picker(stdscr, ".", "Select a Keystore:", [".jks"])
+    else:
+        KEYSTORE_PATH = keystore_path
+
+    if KEYSTORE_PATH is None or KEYSTORE_PATH == "":
+        if prev_keystore_path is not None and prev_keystore_path != "":
+            KEYSTORE_PATH = prev_keystore_path
+            return
+        else:
+            exit(1)
+
+    keystore_copy = tempfile.NamedTemporaryFile(delete=False, suffix=".jks").name
+    ORIGINAL_KEYSTORE_PATH = KEYSTORE_PATH
+    KEYSTORE_PATH = keystore_copy
+    shutil.copyfile(ORIGINAL_KEYSTORE_PATH, keystore_copy)
+
+    try:
+        intro_win = intro_window(stdscr)
+        show_logo(intro_win, False)
+
+        if not check_password(KEYSTORE_PATH, password=""):
+            KEYSTORE_PWD = prompt_password(intro_win)
+        else:
+            fade_logo(intro_win)
+
+        RELOAD_ENTRIES = True
+        HAS_UNSAVED_CHANGES = False
+    except Exception as e:
+        intro_win.addstr(16, 22, "Failed to open Keystore.")
+        intro_win.refresh()
+        intro_win.getch()
+
+def prompt_password(win):
     win_y, win_x = win.getbegyx()
     while True:
         keypad_win = curses.newwin(1, 25, win_y + 15, win_x + 22)
@@ -1099,13 +1118,13 @@ def show_logo(win, final):
 
 def fade_logo(win):
     logo_lines = get_logo_lines()
+    popup_box(win, "")
     for idx, color in enumerate([220, 178, 136, 100, 58, 236, 234]):
         curses.init_pair(30 + idx, color, -1)
         for i, line in enumerate(logo_lines):
             win.addstr(LOGO_Y + i, LOGO_X, line, curses.color_pair(30 + idx) | curses.A_DIM)
         win.refresh()
         curses.napms(35)
-        win.clear()
 
 def shake_logo(win):
     logo_lines = get_logo_lines()
@@ -1119,13 +1138,13 @@ def shake_logo(win):
         curses.napms(35)
     show_logo(win, True)
 
-def draw_footer(stdscr, has_unsaved_changes):
+def draw_footer(stdscr):
     height, width = stdscr.getmaxyx()
     spacing = width // len(FOOTER_OPTIONS)
     for i, item in enumerate(FOOTER_OPTIONS):
         label = item[2:]
         prefix = item[:2]
-        attr_key = curses.color_pair(COLOR_PAIR_SELECTED) if "Save" in label and has_unsaved_changes else curses.color_pair(COLOR_PAIR_FKEYS)
+        attr_key = curses.color_pair(COLOR_PAIR_SELECTED) if "Save" in label and HAS_UNSAVED_CHANGES else curses.color_pair(COLOR_PAIR_FKEYS)
         stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
@@ -1297,38 +1316,32 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     return scroll_offset
 
 def main(stdscr):
+    global RELOAD_ENTRIES, KEYSTORE_PATH, ORIGINAL_KEYSTORE_PATH, KEYSTORE_PWD, HAS_UNSAVED_CHANGES
     init_curses()
     signal.signal(signal.SIGINT, signal.SIG_IGN) # Disable CTRL+C
-    global RELOAD_ENTRIES
 
-    intro_win = intro_window(stdscr)
-    show_logo(intro_win, False)
-
-    if not check_password(KEYSTORE_PATH, password=""):
-        password = prompt_password(intro_win)
-    else:
-        fade_logo(intro_win)
-
-    RELOAD_ENTRIES = True
+    keystore_arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     selected = 0
     scroll_offset = 0
     detail_scroll = 0
     active_panel = 0
 
-    has_unsaved_changes = False
+    entries = [SimpleNamespace(get=lambda k, default=None: {"Alias name": ""}.get(k, default))]
+    draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+
+    open_keystore(stdscr, keystore_arg)
 
     while True:
         height, width = stdscr.getmaxyx()
         panel_height = height - 4  # Subtract top and bottom padding (borders)
-
         if RELOAD_ENTRIES:
             RELOAD_ENTRIES = False
-            entries = get_keystore_entries(KEYSTORE_PATH, password)
+            entries = get_keystore_entries()
             selected = 0
 
         draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel)
-        draw_footer(stdscr, has_unsaved_changes)
+        draw_footer(stdscr)
         draw_menu_bar(None, width)
 
         key = stdscr.getch()
@@ -1343,7 +1356,7 @@ def main(stdscr):
                         if x <= mx < x + item_len:
                             active_menu = i
                             draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                            menu_modal(stdscr, has_unsaved_changes, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                            menu_modal(stdscr, active_menu, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
                             break
                         x += item_len + 2
 
@@ -1423,53 +1436,53 @@ def main(stdscr):
 
             if key == curses.KEY_F3:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                alias = import_cert_file(stdscr, password)
+                alias = import_cert_file(stdscr)
                 if alias:
-                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    entries = get_keystore_entries()
                     selected = find_entry_index_by_alias(entries, alias)
-                    has_unsaved_changes = check_unsaved_changes()
+                    check_unsaved_changes()
 
             elif key == curses.KEY_F4:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 choice = prompt_import_key_type(stdscr)
                 if choice == "PKCS #12":
-                    alias = import_pkcs12_keypair(stdscr, KEYSTORE_PATH, password)
+                    alias = import_pkcs12_keypair(stdscr)
                 elif choice == "PKCS #8":
-                    alias = import_pkcs8_keypair(stdscr, KEYSTORE_PATH, password)
+                    alias = import_pkcs8_keypair(stdscr)
                 else:
                     alias = None
                 if alias:
-                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    entries = get_keystore_entries()
                     selected = find_entry_index_by_alias(entries, alias)
-                    has_unsaved_changes = check_unsaved_changes()
+                    check_unsaved_changes()
 
             elif key == curses.KEY_F5:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                alias = import_cert_from_url(stdscr, password)
+                alias = import_cert_from_url(stdscr)
                 if alias:
-                    entries = get_keystore_entries(KEYSTORE_PATH, password)
+                    entries = get_keystore_entries()
                     selected = find_entry_index_by_alias(entries, alias)
-                    has_unsaved_changes = check_unsaved_changes()
+                    check_unsaved_changes()
 
             elif key == curses.KEY_F7:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                has_unsaved_changes = save_changes(has_unsaved_changes)
+                save_changes()
 
             elif key == curses.KEY_F8:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                has_unsaved_changes = delete_entry(password, entries[selected].get("Alias name"))
-                entries = get_keystore_entries(KEYSTORE_PATH, password)
+                delete_entry(entries[selected].get("Alias name"))
+                entries = get_keystore_entries()
                 selected = min(selected, len(entries) - 1)
 
             elif key == curses.KEY_F9:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                menu_modal(stdscr, has_unsaved_changes, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
+                menu_modal(stdscr, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
-                save_changes(has_unsaved_changes)
+                save_changes()
                 break
 
-        if has_unsaved_changes:
+        if HAS_UNSAVED_CHANGES:
             if selected == len(entries) - 1:
                 scroll_offset = max(0, len(entries) - panel_height)
 
