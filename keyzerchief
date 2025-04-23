@@ -101,7 +101,7 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
-def file_picker(stdscr, start_path=".", title="Select a file", extensions=None):
+def file_picker(stdscr, start_path=".", title="Select a file:", extensions=None):
     win_height = 20
     win_width = 70
     height, width = stdscr.getmaxyx()
@@ -115,7 +115,7 @@ def file_picker(stdscr, start_path=".", title="Select a file", extensions=None):
     curses.curs_set(0)
     win = curses.newwin(win_height, win_width, start_y, start_x)
     win.keypad(True)
-    popup_box(win, f"{title}: {current_path}")
+    popup_box(win, f"{title} {current_path}")
 
     while True:
         clear_window(win)
@@ -318,7 +318,7 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
             elif 32 <= key <= 126 and len(values[current]) < 60:
                 values[current] += chr(key)
             elif key in [10, 13] and current in file_fields:
-                path = file_picker(stdscr, ".", "Select a file", [".key", ".p12", ".cer", ".pem", ".crt", ".jks"])
+                path = file_picker(stdscr, ".", labels[current], [".key", ".p12", ".cer", ".pem", ".crt", ".jks"])
                 if path:
                     values[current] = path
         else:
@@ -785,7 +785,7 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
     def handle_open_keystore(stdscr):
         global KEYSTORE_PATH, password, RELOAD_ENTRIES
 
-        KEYSTORE_PATH = file_picker(stdscr, ".", "Select a Keystore", [".jks"])
+        KEYSTORE_PATH = file_picker(stdscr, ".", "Select a Keystore:", [".jks"])
 
         if not KEYSTORE_PATH:
             return
