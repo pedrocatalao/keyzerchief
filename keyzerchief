@@ -11,6 +11,7 @@ import gzip
 import random
 import time
 import signal
+import tempfile
 from io import BytesIO
 from datetime import datetime
 from datetime import datetime, timezone
@@ -267,7 +268,7 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
                     attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
 
                 win.addstr(y, field_start_x - len(label) + 2, label)
-                win.addstr(y, field_start_x + 3, display_val.ljust(win_width - field_start_x - 5), attr)
+                win.addstr(y, field_start_x + 3, display_val[:win_width - field_start_x - 5].ljust(win_width - field_start_x - 5), attr)
 
         btn_y = win_height - 2
         btn_x = (win_width - sum(len(b) for b in buttons) - BUTTON_SPACING) // 2
@@ -285,7 +286,7 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
                 win.move(y, x + 1)
             else:
                 val = values[current] if current not in masked_fields else '*' * len(values[current])
-                win.move(y, field_start_x + 3 + len(val))
+                win.move(y, min(field_start_x + 3 + len(val), win_width - 2))
 
         win.refresh()
         key = win.getch()
@@ -365,6 +366,22 @@ def prompt_import_key_type(stdscr):
         elif key in [27]:
             return None
 
+def handle_import_result(alias, result, win):
+    win_height, win_width = win.getmaxyx()
+    if result.returncode == 0:
+        win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
+        win.addstr(win_height - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+        return alias
+    else:
+        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
+        win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
+        win.addstr(win_height - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+        return None
+
 def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
     form_data, win = popup_form(
         stdscr,
@@ -380,7 +397,6 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
     if form_data is None or "key_pair_file" not in form_data:
         return None
 
-    win_height, win_width = win.getmaxyx()
     clear_window(win)
     win.addstr(2, 2, "Importing key pair...", curses.A_BOLD)
 
@@ -396,16 +412,7 @@ def import_pkcs12_keypair(stdscr, keystore_path, keystore_pass):
         "-destalias", alias
     ]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    if result.returncode == 0:
-        win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-        return alias
-    else:
-        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
-        win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
-    win.addstr(win_height - 3, 2, "Press any key to continue.")
-    win.refresh()
-    win.getch()
+    return handle_import_result(alias, result, win)
 
 def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
     form_data, win = popup_form(
@@ -413,7 +420,7 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
         title="Import PKCS #8 Key Pair",
         labels=[
             "Certificates file:",
-            "PKCS#8 key file:",
+            "PKCS8 key file:",
             "Encrypted key?",
             "Decryption password:"
         ],
@@ -427,47 +434,52 @@ def import_pkcs8_keypair(stdscr, keystore_path, keystore_pass):
     if form_data is None or "certificates_file" not in form_data:
         return None
 
-    win_height, win_width = win.getmaxyx()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".p12") as p12_file:
+        p12_path = p12_file.name
+
     clear_window(win)
+    _, win_width = win.getmaxyx()
     win.addstr(2, 2, "Importing key pair...", curses.A_BOLD)
 
     alias = os.path.splitext(os.path.basename(form_data['pkcs8_key_file']))[0]
 
-    pkcs8_cmd = [
-        "openssl", "pkcs8",
-        "-topk8",
-        "-inform", "PEM",
-        "-outform", "PEM",
-        "-in", form_data['pkcs8_key_file'],
-        "-passin", f"pass:{form_data['decryption_password']}" if form_data['encrypted_key'] else "pass:",
-        "-out", "/tmp/converted_pkcs8.key"
+    openssl_cmd = [
+        "openssl", "pkcs12",
+        "-export",
+        "-in", form_data['certificates_file'],
+        "-inkey", form_data['pkcs8_key_file'],
+        "-out", p12_path,
+        "-name", alias,
+        "-passout", f"pass:{keystore_pass}"
     ]
 
-    cmd = [
-        "keytool", "-importcert",
-        "-keystore", keystore_path,
-        "-storepass", keystore_pass,
+    if form_data is not None and "decryption_password" in form_data:
+        openssl_cmd += ["-passin", f"pass:{form_data['decryption_password']}"]
+
+    keytool_cmd = [
+        "keytool", "-importkeystore",
+        "-deststorepass", keystore_pass,
+        "-destkeypass", keystore_pass,
+        "-destkeystore", keystore_path,
+        "-srckeystore", p12_path,
+        "-srcstoretype", "PKCS12",
+        "-srcstorepass", keystore_pass,
         "-alias", alias,
-        "-file", form_data['certificates_file'],
-        "-keypass", form_data['decryption_password'] if form_data['encrypted_key'] else keystore_pass
+        "-noprompt"
     ]
 
-    # Run OpenSSL to convert key
-    openssl_result = subprocess.run(pkcs8_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if openssl_result.returncode != 0:
-        win.addstr(3, 2, "OpenSSL conversion failed:", curses.A_BOLD)
-        win.addstr(4, 2, openssl_result.stdout.strip()[:win_width - 4])
-    else:
-        keytool_result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if keytool_result.returncode == 0:
-            win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-            return alias
+    try:
+        # Run OpenSSL to convert key
+        openssl_result = subprocess.run(openssl_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if openssl_result.returncode != 0:
+            win.addstr(3, 2, "OpenSSL conversion failed:", curses.A_BOLD)
+            win.addstr(4, 2, openssl_result.stdout.strip()[:win_width - 4])
         else:
-            win.addstr(3, 2, "Import failed:", curses.A_BOLD)
-            win.addstr(4, 2, keytool_result.stderr.strip())
-    win.addstr(win_height - 3, 2, "Press any key to continue.")
-    win.refresh()
-    win.getch()
+            result = subprocess.run(keytool_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            return handle_import_result(alias, result, win)
+    finally:
+        if os.path.exists(p12_path):
+            os.remove(p12_path)
 
 def import_cert_file(stdscr, password):
     form_data, win = popup_form(
@@ -479,8 +491,6 @@ def import_cert_file(stdscr, password):
 
     if form_data is None or "file_path" not in form_data:
         return None
-
-    win_height, win_width = win.getmaxyx()
 
     cert_file = form_data["file_path"]
     alias = os.path.splitext(os.path.basename(cert_file))[0]
@@ -496,19 +506,7 @@ def import_cert_file(stdscr, password):
     win.addstr(2, 2, f"Importing {cert_file}...", curses.A_BOLD)
     win.refresh()
     result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if result.returncode == 0:
-        win.addstr(3, 2, f"Successfully imported: {alias}", curses.A_BOLD)
-        win.addstr(win_height - 3, 2, "Press any key to continue.")
-        win.refresh()
-        win.getch()
-        return alias
-    else:
-        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
-        win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
-        win.addstr(win_height - 3, 2, "Press any key to continue.")
-        win.refresh()
-        win.getch()
-        return None
+    return handle_import_result(alias, result, win)
 
 def import_cert_from_url(stdscr, password):
     form_data, win = popup_form(
@@ -522,57 +520,43 @@ def import_cert_from_url(stdscr, password):
         return None
 
     url = form_data["url"]
-    win_height, win_width = win.getmaxyx()
-    try:
-        clear_window(win)
-        win.addstr(2, 2, f"Fetching certificate from {url}...")
-        if url.startswith("https://") or url.startswith("http://"):
-            url = url.split("://", 1)[1]
+    clear_window(win)
+    win.addstr(2, 2, f"Fetching certificate from {url}...")
+    if url.startswith("https://") or url.startswith("http://"):
+        url = url.split("://", 1)[1]
 
-        parts = url.split(":")
-        host = parts[0]
-        port = parts[1] if len(parts) > 1 else "443"
+    parts = url.split(":")
+    host = parts[0]
+    port = parts[1] if len(parts) > 1 else "443"
 
-        cert_path = f"/tmp/cert_from_{url.replace(':', '_').replace('/', '_')}.crt"
-        cmd = [
-            "openssl", "s_client", "-showcerts",
-            "-servername", host,
-            "-connect", f"{host}:{port}"
-        ]
-        fetch = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, timeout=5)
-        start = fetch.stdout.find("-----BEGIN CERTIFICATE-----")
-        end = fetch.stdout.find("-----END CERTIFICATE-----") + len("-----END CERTIFICATE-----")
-        cert = fetch.stdout[start:end]
+    cert_path = f"/tmp/cert_from_{url.replace(':', '_').replace('/', '_')}.crt"
+    cmd = [
+        "openssl", "s_client", "-showcerts",
+        "-servername", host,
+        "-connect", f"{host}:{port}"
+    ]
+    fetch = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, timeout=5)
+    start = fetch.stdout.find("-----BEGIN CERTIFICATE-----")
+    end = fetch.stdout.find("-----END CERTIFICATE-----") + len("-----END CERTIFICATE-----")
+    cert = fetch.stdout[start:end]
 
-        if "-----BEGIN CERTIFICATE-----" not in cert:
-            raise Exception("Could not extract certificate")
+    if "-----BEGIN CERTIFICATE-----" not in cert:
+        raise Exception("Could not extract certificate")
 
-        with open(cert_path, "w") as f:
-            f.write(cert)
+    with open(cert_path, "w") as f:
+        f.write(cert)
 
-        alias = host
-        import_cmd = [
-            "keytool", "-importcert",
-            "-alias", alias,
-            "-keystore", KEYSTORE_PATH,
-            "-storepass", password,
-            "-file", cert_path,
-            "-noprompt"
-        ]
-        result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if result.returncode == 0:
-            win.addstr(3, 2, f"Successfully imported cert from {url}", curses.A_BOLD)
-        else:
-            win.addstr(3, 2, "Import failed:", curses.A_BOLD)
-            win.addstr(4, 2, result.stdout.strip()[:win_width - 4])
-    except Exception as e:
-        win.addstr(3, 2, "Import failed:", curses.A_BOLD)
-        win.addstr(4, 2, f"Error: {str(e)}", curses.A_BOLD)
-
-    win.addstr(win_height - 3, 2, "Press any key to continue.")
-    win.refresh()
-    win.getch()
-    return alias if 'alias' in locals() else None
+    alias = host
+    import_cmd = [
+        "keytool", "-importcert",
+        "-alias", alias,
+        "-keystore", KEYSTORE_PATH,
+        "-storepass", password,
+        "-file", cert_path,
+        "-noprompt"
+    ]
+    result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return handle_import_result(alias, result, win)
 
 def delete_entry(password, alias):
     confirm_height, confirm_width = 8, 60
