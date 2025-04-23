@@ -36,6 +36,7 @@ LOGO_Y = 2
 # Colors
 COLOR_EXPIRED_RED = 196
 COLOR_EXPIRED_RED_DIM = 197
+
 # Pairs
 COLOR_PAIR_SELECTED = 1
 COLOR_PAIR_SELECTED_DIM = 2
@@ -63,6 +64,18 @@ MENU_SPACING = 3
 MENU_ITEMS = ["Left", "File", "Options", "Right"]
 FOOTER_OPTIONS = [" 1Help", " 2GenKeyPair", " 3ImpCert", " 4ImpKeyPair", " 5ImpFromWeb", " 6SetPwd", " 7Save", " 8Delete", " 9PullDn", "10Quit"]
 
+MOUSE_ENABLED = True
+RIGHT_PANEL_HIGHLIGHT_TERM = None
+RELOAD_ENTRIES = False
+FILTER_STATE = {
+    "name": "",
+    "partial_name": "Yes",
+    "valid": "Yes",
+    "expired": "Yes",
+    "keys": "Yes",
+    "certificates": "Yes"
+}
+
 def init_curses():
     curses.set_escdelay(25) # Esc key faster
     curses.curs_set(0)
@@ -72,7 +85,7 @@ def init_curses():
     curses.init_color(COLOR_EXPIRED_RED_DIM, 600, 150, 150)
     curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
     curses.init_pair(COLOR_PAIR_SELECTED_DIM, curses.COLOR_BLACK, 73)
-    curses.init_pair(COLOR_PAIR_SELECTED_DIM_MORE, curses.COLOR_BLACK, 30)
+    curses.init_pair(COLOR_PAIR_SELECTED_DIM_MORE, curses.COLOR_BLACK, 23)
     curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)
     curses.init_pair(COLOR_PAIR_MENU, curses.COLOR_BLACK, curses.COLOR_YELLOW)
     curses.init_pair(COLOR_PAIR_FKEYS, curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -81,13 +94,13 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_DARK, 245, -1)
     curses.init_pair(COLOR_PAIR_DARKER, 237, -1)
     curses.init_pair(COLOR_PAIR_CYAN, 116, -1)
-    curses.init_pair(COLOR_PAIR_CYAN_DIM, 109, -1)
+    curses.init_pair(COLOR_PAIR_CYAN_DIM, 73, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED, COLOR_EXPIRED_RED, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED_DIM, COLOR_EXPIRED_RED_DIM, -1)
     curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
-def file_picker(stdscr, start_path="."):
+def file_picker(stdscr, start_path=".", title="Select a file", extensions=None):
     win_height = 20
     win_width = 70
     height, width = stdscr.getmaxyx()
@@ -101,12 +114,13 @@ def file_picker(stdscr, start_path="."):
     curses.curs_set(0)
     win = curses.newwin(win_height, win_width, start_y, start_x)
     win.keypad(True)
-    popup_box(win, f"Select a file: {current_path}")
+    popup_box(win, f"{title}: {current_path}")
 
     while True:
         clear_window(win)
         try:
             entries = os.listdir(current_path)
+            entries = [e for e in entries if os.path.isdir(os.path.join(current_path, e)) or not extensions or any(e.lower().endswith(ext) for ext in extensions)]
             entries.sort()
             entries = [".."] + entries
         except PermissionError:
@@ -177,13 +191,13 @@ def file_picker(stdscr, start_path="."):
         elif selected_index >= scroll_offset + visible_height:
             scroll_offset = selected_index - visible_height + 1
 
-def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choice_fields=None, dependencies=None, choice_labels=None, default_values=None, placeholder_values=None):
+def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choice_fields=None, dependencies=None, choice_labels=None, default_values=None, placeholder_values=None, buttons=None):
     height, width = stdscr.getmaxyx()
     win_width = 75
     win_height = 2 * len(labels) + 6
     start_y = (height - win_height) // 2
     start_x = (width - win_width) // 2
-    buttons = [" Import ", " Cancel "]
+    buttons = buttons or [" OK ", " Cancel "]
 
     file_fields = file_fields or []
     masked_fields = masked_fields or []
@@ -303,14 +317,14 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
             elif 32 <= key <= 126 and len(values[current]) < 60:
                 values[current] += chr(key)
             elif key in [10, 13] and current in file_fields:
-                path = file_picker(stdscr)
+                path = file_picker(stdscr, ".", "Select a file", [".key", ".p12", ".cer", ".pem", ".crt", ".jks"])
                 if path:
                     values[current] = path
         else:
             if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
                 selected_button = 1 - selected_button
             elif key in [10, 13]:
-                if selected_button == 0 and all(values[i] for i in visible_fields):
+                if selected_button == 0:
                     curses.noecho()
                     return {
                         labels[i].rstrip(':?#').lower().replace(' ', '_'): values[i].strip()
@@ -654,6 +668,34 @@ def save_changes(has_unsaved_changes):
         elif ch in [27]:
             return True
 
+def filter_entries(entries):
+    filtered = []
+    for entry in entries:
+        alias = entry.get("Alias name", "").lower()
+
+        if FILTER_STATE["name"]:
+            if FILTER_STATE["partial_name"] == "Yes":
+                if FILTER_STATE["name"].lower() not in alias:
+                    continue
+            else:
+                if FILTER_STATE["name"].lower() != alias:
+                    continue
+
+        if FILTER_STATE["expired"] == "No" and entry.get("__expired__", False):
+            continue
+
+        if FILTER_STATE["valid"] == "No" and not entry.get("__expired__", False):
+            continue
+
+        if FILTER_STATE["keys"] == "No" and entry.get("__is_key__", False):
+            continue
+
+        if FILTER_STATE["certificates"] == "No" and entry.get("__is_cert__", False):
+            continue
+
+        filtered.append(entry)
+    return filtered
+
 def get_keystore_entries(path, password):
     cmd = ["keytool", "-list", "-v", "-keystore", path, "-storepass", password]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -698,7 +740,7 @@ def get_keystore_entries(path, password):
         else:
             entry["__expired__"] = False
 
-    return entries
+    return filter_entries(entries)
 
 def find_entry_index_by_alias(entries, alias):
     for i, entry in enumerate(entries):
@@ -720,7 +762,7 @@ def draw_menu_bar(active_menu, width):
 
 def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
     submenus = {
-        "Left": ["Search", "Filter"],
+        "Left": ["Filter"],
         "File": ["Open keystore", "Quit"],
         "Options": ["Enable/Disable mouse"],
         "Right": ["Search content"]
@@ -728,6 +770,85 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
 
     selected_index = None
     _, width = stdscr.getmaxyx()
+
+    def handle_filter_popup():
+        global FILTER_STATE
+        global RELOAD_ENTRIES
+        form_data, _ = popup_form(
+            stdscr,
+            title="Filter entries",
+            labels=[
+                "Name:",
+                "Partial name:",
+                "Valid:",
+                "Expired:",
+                "Keys:",
+                "Certificates:"
+            ],
+            choice_fields=[1, 2, 3, 4, 5],
+            choice_labels={
+                1: ("Yes", "No"),
+                2: ("Yes", "No"),
+                3: ("Yes", "No"),
+                4: ("Yes", "No"),
+                5: ("Yes", "No")
+            }
+        )
+        if form_data:
+            FILTER_STATE.update(form_data)
+            RELOAD_ENTRIES = True
+
+    def handle_open_keystore(stdscr):
+        global KEYSTORE_PATH, password, RELOAD_ENTRIES
+
+        KEYSTORE_PATH = file_picker(stdscr, ".", "Select a Keystore", [".jks"])
+
+        if not KEYSTORE_PATH:
+            return
+
+        try:
+            intro_win = intro_window(stdscr)
+            show_logo(intro_win, False)
+
+            if not check_password(KEYSTORE_PATH, password=""):
+                password = prompt_password(intro_win)
+            else:
+                fade_logo(intro_win)
+
+            RELOAD_ENTRIES = True
+
+        except Exception as e:
+            stdscr.clear()
+            stdscr.addstr(2, 2, f"Failed to open keystore: {e}")
+            stdscr.refresh()
+            stdscr.getch()
+
+    def handle_toggle_mouse():
+        global MOUSE_ENABLED
+        MOUSE_ENABLED = not MOUSE_ENABLED
+        if MOUSE_ENABLED:
+            curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+        else:
+            curses.mousemask(0)
+
+    def handle_search_content(stdscr):
+        form_data, _ = popup_form(
+            stdscr,
+            title="Search content",
+            labels=["Search term:"],
+            buttons=[" Search ", " Cancel "],
+            placeholder_values={0: "Enter a word or phrase to highlight"}
+        )
+
+        if not form_data:
+            return
+
+        term = form_data.get("search_term")
+        if not term:
+            return
+
+        global RIGHT_PANEL_HIGHLIGHT_TERM
+        RIGHT_PANEL_HIGHLIGHT_TERM = term.lower()
 
     def draw_submenu():
         items = submenus[MENU_ITEMS[active_menu]]
@@ -749,7 +870,12 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
 
     draw_menu_bar(active_menu, width)
     submenu_win = draw_submenu()
-    submenu_win = None
+    submenu_bounds = {
+        "x": 1 + sum(len(f" {MENU_ITEMS[i]} ") + MENU_SPACING for i in range(active_menu)),
+        "y": 1,
+        "width": max(len(item) for item in submenus[MENU_ITEMS[active_menu]]) + 4,
+        "height": len(submenus[MENU_ITEMS[active_menu]]) + 2
+    }
 
     while True:
         key = stdscr.getch()
@@ -776,9 +902,36 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
                         if redraw_main_ui:
                             redraw_main_ui()
                         draw_menu_bar(active_menu, width)
-                        draw_submenu()
+                        submenu_win = draw_submenu()
                         break
-                    x += item_len + 2
+                    x += item_len + MENU_SPACING
+
+            elif submenu_win:
+                if submenu_bounds:
+                    if submenu_bounds["y"] < my < submenu_bounds["y"] + submenu_bounds["height"] - 1 and \
+                    submenu_bounds["x"] <= mx < submenu_bounds["x"] + submenu_bounds["width"]:
+                        selected_index = my - submenu_bounds["y"] - 1
+                        submenu_win = draw_submenu()
+                        curses.napms(35)
+                        items = submenus[MENU_ITEMS[active_menu]]
+                        selected_label = items[selected_index]
+                        submenu_win.clear()
+                        submenu_win.refresh()
+                        if selected_label == "Filter":
+                            handle_filter_popup()
+                        elif selected_label == "Open keystore":
+                            handle_open_keystore(stdscr)
+                        elif selected_label == "Quit":
+                            save_changes(has_unsaved_changes)
+                            exit(0)
+                        elif selected_label == "Enable/Disable mouse":
+                            handle_toggle_mouse()
+                        elif selected_label == "Search content":
+                            handle_search_content(stdscr)
+                        else:
+                            stdscr.addstr(3, 2, f"Selected menu: {selected_label}   ")
+                            stdscr.refresh()
+                break
 
         if key == curses.KEY_LEFT:
             if submenu_win:
@@ -790,7 +943,7 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
             if redraw_main_ui:
                 redraw_main_ui()
             draw_menu_bar(active_menu, width)
-            draw_submenu()
+            submenu_win = draw_submenu()
 
         elif key == curses.KEY_RIGHT:
             if submenu_win:
@@ -802,7 +955,7 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
             if redraw_main_ui:
                 redraw_main_ui()
             draw_menu_bar(active_menu, width)
-            draw_submenu()
+            submenu_win = draw_submenu()
 
         elif key == curses.KEY_DOWN:
             if selected_index is None:
@@ -818,6 +971,24 @@ def menu_modal(stdscr, has_unsaved_changes, active_menu=0, redraw_main_ui=None):
         elif key == curses.KEY_DOWN and submenu_win:
             selected_index = (selected_index + 1) % len(submenus[MENU_ITEMS[active_menu]])
             submenu_win = draw_submenu()
+
+        elif key in [10, 13] and selected_index is not None:
+            selected_label = submenus[MENU_ITEMS[active_menu]][selected_index]
+            if selected_label == "Filter":
+                handle_filter_popup()
+            elif selected_label == "Open keystore":
+                handle_open_keystore(stdscr)
+            elif selected_label == "Quit":
+                save_changes(has_unsaved_changes)
+                exit(0)
+            elif selected_label == "Enable/Disable mouse":
+                handle_toggle_mouse()
+            elif selected_label == "Search content":
+                handle_search_content(stdscr)
+            if submenu_win:
+                submenu_win.clear()
+                submenu_win.refresh()
+            return None, None
 
         elif key in [curses.KEY_F9, 27]:  # ESC
             if submenu_win:
@@ -1067,6 +1238,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
     # Right panel details
     detail_lines = entries[selected].get("__rendered__", [])[detail_scroll:]
     line_num = 2
+    highlight_term = RIGHT_PANEL_HIGHLIGHT_TERM.lower() if RIGHT_PANEL_HIGHLIGHT_TERM else None
     for key, value in detail_lines:
         if line_num >= height - 2:
             break
@@ -1074,11 +1246,13 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
         attr = curses.color_pair(COLOR_PAIR_WHITE if active_panel == RIGHT_PANEL else COLOR_PAIR_WHITE_DIM)
         attrtit = curses.color_pair(COLOR_PAIR_CYAN if active_panel == RIGHT_PANEL else COLOR_PAIR_CYAN_DIM)
         attrexp = curses.color_pair(COLOR_PAIR_EXPIRED if active_panel == RIGHT_PANEL else COLOR_PAIR_EXPIRED_DIM)
+        highlight_attr = curses.color_pair(COLOR_PAIR_MENU)
 
         if dim:
             attr |= curses.A_DIM
             attrtit |= curses.A_DIM
             attrexp |= curses.A_DIM
+            highlight_attr |= curses.A_DIM
 
         stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
         if key == "Valid from" and entries[selected].get("__expired__") == True:
@@ -1090,7 +1264,23 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
             if line_num >= height - 2:
                 break
             stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
-            stdscr.addstr(line_num, panel_width + 4, l, attr)
+            if highlight_term and highlight_term in l.lower():
+                start = 0
+                x = panel_width + 4
+                l_lower = l.lower()
+                while start < len(l):
+                    idx = l_lower.find(highlight_term, start)
+                    if idx == -1:
+                        stdscr.addstr(line_num, x, l[start:], attr)
+                        break
+                    if idx > start:
+                        stdscr.addstr(line_num, x, l[start:idx], attr)
+                        x += idx - start
+                    stdscr.addstr(line_num, x, l[idx:idx+len(highlight_term)], highlight_attr)
+                    x += len(highlight_term)
+                    start = idx + len(highlight_term)
+            else:
+                stdscr.addstr(line_num, panel_width + 4, l, attr)
             line_num += 1
 
     # Clear remaining right panel rows
@@ -1104,6 +1294,7 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
 def main(stdscr):
     init_curses()
     signal.signal(signal.SIGINT, signal.SIG_IGN) # Disable CTRL+C
+    global RELOAD_ENTRIES
 
     intro_win = intro_window(stdscr)
     show_logo(intro_win, False)
@@ -1113,13 +1304,7 @@ def main(stdscr):
     else:
         fade_logo(intro_win)
 
-    try:
-        entries = get_keystore_entries(KEYSTORE_PATH, password)
-    except Exception as e:
-        stdscr.clear()
-        stdscr.addstr(0, 2, str(e))
-        stdscr.getch()
-        return
+    RELOAD_ENTRIES = True
 
     selected = 0
     scroll_offset = 0
@@ -1131,6 +1316,11 @@ def main(stdscr):
     while True:
         height, width = stdscr.getmaxyx()
         panel_height = height - 4  # Subtract top and bottom padding (borders)
+
+        if RELOAD_ENTRIES:
+            RELOAD_ENTRIES = False
+            entries = get_keystore_entries(KEYSTORE_PATH, password)
+            selected = 0
 
         draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel)
         draw_footer(stdscr, has_unsaved_changes)
