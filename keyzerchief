@@ -712,9 +712,7 @@ def get_keystore_entries():
         valid_from = entry.get("Valid from")
         if valid_from and "until:" in valid_from:
             try:
-                until_str = valid_from.split("until:")[1].strip()
-                until_str_clean = until_str.replace("WET", "+0000")
-                until_date = datetime.strptime(until_str_clean, "%a %b %d %H:%M:%S %z %Y")
+                until_date = parse_until_date(valid_from)
                 entry["__expired__"] = until_date < datetime.now(timezone.utc)
             except Exception:
                 entry["__expired__"] = False
@@ -722,6 +720,28 @@ def get_keystore_entries():
             entry["__expired__"] = False
 
     return filter_entries(entries)
+
+def parse_until_date(valid_from):
+    TZ_MAP = {
+        "WET": "+0000",
+        "WEST": "+0100",
+        "CET": "+0100",
+        "CEST": "+0200",
+        # Add more as needed
+    }
+    try:
+        until_str = valid_from.split("until:")[1].strip()
+        parts = until_str.split()
+        if parts[-2] in TZ_MAP:
+            parts[-2] = TZ_MAP[parts[-2]]
+        else:
+            parts[-2] = "+0000"  # default fallback
+
+        until_str_clean = " ".join(parts)
+        return datetime.strptime(until_str_clean, "%a %b %d %H:%M:%S %z %Y")
+    except Exception as e:
+        print(f"Failed to parse date: {e}")
+        return None
 
 def find_entry_index_by_alias(entries, alias):
     for i, entry in enumerate(entries):
