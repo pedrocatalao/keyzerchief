@@ -119,6 +119,7 @@ def file_picker(stdscr, start_path=".", title="Select a file:", extensions=None)
 
     while True:
         clear_window(win)
+        popup_box(win, f"{title} {current_path}")
         try:
             entries = os.listdir(current_path)
             entries = [e for e in entries if os.path.isdir(os.path.join(current_path, e)) or not extensions or any(e.lower().endswith(ext) for ext in extensions)]
