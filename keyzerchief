@@ -54,6 +54,7 @@ COLOR_PAIR_EXPIRED_DIM = 12
 COLOR_PAIR_DARK = 13
 COLOR_PAIR_DARKER = 14
 COLOR_PAIR_FIELD = 15
+COLOR_PAIR_HIGHLIGH_DIM = 16
 
 # Mouse support constants
 LEFT_PANEL = 0
@@ -99,6 +100,7 @@ def init_curses():
     curses.init_pair(COLOR_PAIR_EXPIRED, COLOR_EXPIRED_RED, -1)
     curses.init_pair(COLOR_PAIR_EXPIRED_DIM, COLOR_EXPIRED_RED_DIM, -1)
     curses.init_pair(COLOR_PAIR_FIELD, curses.COLOR_WHITE, 234)
+    curses.init_pair(COLOR_PAIR_HIGHLIGH_DIM, curses.COLOR_BLACK, 100)
     curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
 
 def file_picker(stdscr, start_path=".", title="Select a file:", extensions=None):
@@ -1237,13 +1239,31 @@ def draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_pane
             attr |= curses.A_DIM
             attrtit |= curses.A_DIM
             attrexp |= curses.A_DIM
-            highlight_attr |= curses.A_DIM
+            highlight_attr = curses.color_pair(COLOR_PAIR_HIGHLIGH_DIM)
 
         stdscr.addstr(line_num, panel_width + 2, " " * (width - panel_width - 3))
-        if key == "Valid from" and entries[selected].get("__expired__") == True:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attrexp)
+
+        key_str = str(key)
+        x = panel_width + 2
+        start = 0
+        lower_key = key_str.lower()
+        while start < len(key_str):
+            idx = lower_key.find(highlight_term, start) if highlight_term else -1
+            if idx == -1:
+                color = attrexp if key == "Valid from" and entries[selected].get("__expired__") == True else attrtit
+                stdscr.addstr(line_num, x, key_str[start:] + ":", curses.A_UNDERLINE | color)
+                x += len(key_str[start:]) + 1
+                break
+            if idx > start:
+                color = attrexp if key == "Valid from" and entries[selected].get("__expired__") == True else attrtit
+                stdscr.addstr(line_num, x, key_str[start:idx], curses.A_UNDERLINE | color)
+                x += idx - start
+            stdscr.addstr(line_num, x, key_str[idx:idx+len(highlight_term)], curses.A_UNDERLINE | highlight_attr)
+            x += len(highlight_term)
+            start = idx + len(highlight_term)
         else:
-            stdscr.addstr(line_num, panel_width + 2, f"{key}:", curses.A_UNDERLINE | attrtit)
+            stdscr.addstr(line_num, x, ":", curses.A_UNDERLINE | attrtit)
+
         line_num += 1
         for l in lines:
             if line_num >= height - 2:
