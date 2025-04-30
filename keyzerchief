@@ -653,7 +653,6 @@ def filter_entries(entries):
     filtered = []
     for entry in entries:
         alias = entry.get("Alias name", "").lower()
-
         if FILTER_STATE["name"]:
             if FILTER_STATE["partial_name"] == "Yes":
                 if FILTER_STATE["name"].lower() not in alias:
@@ -661,19 +660,14 @@ def filter_entries(entries):
             else:
                 if FILTER_STATE["name"].lower() != alias:
                     continue
-
         if FILTER_STATE["expired"] == "No" and entry.get("__expired__", False):
             continue
-
         if FILTER_STATE["valid"] == "No" and not entry.get("__expired__", False):
             continue
-
         if FILTER_STATE["keys"] == "No" and entry.get("__is_key__", False):
             continue
-
         if FILTER_STATE["certificates"] == "No" and entry.get("__is_cert__", False):
             continue
-
         filtered.append(entry)
     return filtered
 
