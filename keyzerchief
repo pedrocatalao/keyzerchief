@@ -647,7 +647,7 @@ def save_changes():
                     break
                 break
             elif ch in [27]:
-                break
+                return "esc"
 
 def filter_entries(entries):
     filtered = []
@@ -1493,8 +1493,9 @@ def main(stdscr):
                 menu_modal(stdscr, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
-                save_changes()
-                break
+                ret = save_changes()
+                if ret is None:
+                    break
 
         if HAS_UNSAVED_CHANGES:
             if selected == len(entries) - 1:
