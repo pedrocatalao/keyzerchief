@@ -595,6 +595,86 @@ def delete_entry(alias):
         elif ch in [27]:
             return False
 
+def change_keystore_password(stdscr):
+    global KEYSTORE_PWD, KEYSTORE_PATH
+
+    form_data, win = popup_form(
+        stdscr,
+        title="Change Keystore Password",
+        labels=["New password:", "Confirm new password:"],
+        masked_fields=[0, 1]
+    )
+
+    if form_data is None:
+        return None
+
+    new_password = form_data.get("new_password")
+    confirm_password = form_data.get("confirm_new_password")
+
+    if new_password != confirm_password:
+        popup_box(win, "Error")
+        win.addstr(2, 2, "Passwords do not match. Please try again.", curses.color_pair(COLOR_PAIR_EXPIRED))
+        win.refresh()
+        win.getch()
+        return None
+
+    if new_password:
+        try:
+            subprocess.check_call([
+                "keytool",
+                "-storepasswd",
+                "-keystore", KEYSTORE_PATH,
+                "-storepass", KEYSTORE_PWD,
+                "-new", new_password
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError as e:
+            popup_box(win, "Error")
+            win.addstr(2, 2, f"Error: {str(e)}", curses.color_pair(COLOR_PAIR_EXPIRED))
+            win.refresh()
+            win.getch()
+            return None
+
+        try:
+            output = subprocess.check_output([
+                "keytool",
+                "-list",
+                "-keystore", KEYSTORE_PATH,
+                "-storepass", new_password
+            ], text=True, stderr=subprocess.DEVNULL)
+
+            aliases = []
+            for line in output.splitlines():
+                if "entry" in line:
+                    alias = line.split(",")[0].strip()
+                    aliases.append(alias)
+        except subprocess.CalledProcessError as e:
+            popup_box(win, "Error")
+            win.addstr(2, 2, f"Error: {str(e)}", curses.color_pair(COLOR_PAIR_EXPIRED))
+            win.refresh()
+            win.getch()
+            return None
+
+        for alias in aliases:
+            try:
+                subprocess.check_call([
+                    "keytool",
+                    "-keypasswd",
+                    "-keystore", KEYSTORE_PATH,
+                    "-alias", alias,
+                    "-storepass", new_password,
+                    "-keypass", KEYSTORE_PWD,
+                    "-new", new_password
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:  # Likely a trustedCertEntry (no key password)
+                continue
+
+        popup_box(win, "Success")
+        KEYSTORE_PWD = new_password
+        win.addstr(2, 2, "Password changed successfully.")
+        win.addstr(win.getmaxyx()[0] - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+
 def check_password(keystore_path, password):
     try:
         subprocess.run(
@@ -1477,6 +1557,11 @@ def main(stdscr):
                     entries = get_keystore_entries()
                     selected = find_entry_index_by_alias(entries, alias)
                     check_unsaved_changes()
+
+            elif key == curses.KEY_F6:
+                draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+                change_keystore_password(stdscr)
+                check_unsaved_changes()
 
             elif key == curses.KEY_F7:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
