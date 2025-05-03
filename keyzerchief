@@ -298,7 +298,7 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
                 idx = visible_fields.index(current)
                 if idx > 0:
                     current = visible_fields[idx - 1]
-            elif key == curses.KEY_DOWN:
+            elif key in [curses.KEY_DOWN, 9]:
                 idx = visible_fields.index(current)
                 if idx < len(visible_fields) - 1:
                     current = visible_fields[idx + 1]
@@ -321,7 +321,7 @@ def popup_form(stdscr, title, labels, file_fields=None, masked_fields=None, choi
                 if path:
                     values[current] = path
         else:
-            if key in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+            if key in [curses.KEY_LEFT, curses.KEY_RIGHT, 9]:
                 selected_button = 1 - selected_button
             elif key in [10, 13]:
                 if selected_button == 0:
@@ -577,7 +577,7 @@ def delete_entry(alias):
             btn_x += len(btn) + BUTTON_SPACING
         confirm_win.refresh()
         ch = confirm_win.getch()
-        if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+        if ch in [curses.KEY_LEFT, curses.KEY_RIGHT, 9]:
             selected_option = 1 - selected_option
         elif ch in [10, 13]:
             if selected_option == 0:
@@ -713,7 +713,7 @@ def save_changes():
                 btn_x += len(btn) + BUTTON_SPACING
             confirm_win.refresh()
             ch = confirm_win.getch()
-            if ch in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+            if ch in [curses.KEY_LEFT, curses.KEY_RIGHT, 9]:
                 selected_option = (selected_option + 1) % len(options)
             elif ch in [10, 13]:
                 if selected_option == 0:
