@@ -17,6 +17,7 @@ This is a terminal tool to manage Java keystores.
 * Import certificate from file.
 * Import key pair in multiple formats (PKCS#8, PKCS#12, PVK, OpenSSL).
 * Delete selected entry.
+* Change keystore password.
 * File picker to browse and select files.
 * Working menu (with mouse).
 * Filter results.
@@ -26,4 +27,3 @@ This is a terminal tool to manage Java keystores.
 ### To do
 
 * Generate key pair.
-* Set password.
