@@ -9,6 +9,7 @@ import os
 import base64
 import gzip
 import random
+import threading
 import time
 import signal
 import tempfile
@@ -1115,8 +1116,7 @@ def prompt_password(win):
 
         while True:
             ch = keypad_win.getch()
-            subprocess.Popen(["afplay", "keystroke.mp3", "-v", "0.6"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
+            play_sfx("typing")
             if ch in [10, 13]:  # Enter
                 if not check_password(KEYSTORE_PATH, password):
                     curses.curs_set(0)
@@ -1182,6 +1182,7 @@ def intro_window(stdscr):
     intro_win = curses.newwin(box_height, box_width, box_y, box_x)
     popup_box(intro_win, "")
     curses.noecho()
+    play_sfx("intro")
     title = "Keyzer Chief 1.6"
     for i in range(len(title)):
         intro_win.addstr(4, 26, title[:i+1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
@@ -1231,6 +1232,11 @@ def shake_logo(win):
         win.refresh()
         curses.napms(35)
     show_logo(win, True)
+
+def play_sfx(sound_file, volume=0.6):
+    def play():
+        subprocess.Popen(["afplay", f"sfx/{sound_file}.mp3", "-v", str(volume)])
+    threading.Thread(target=play, daemon=True).start()
 
 def draw_footer(stdscr):
     height, width = stdscr.getmaxyx()
@@ -1523,6 +1529,7 @@ def main(stdscr):
                 detail_scroll = max(0, len(entries[selected].get("__rendered__", [])) - 1)
 
         elif key == ord('\t') or key == 9:
+            play_sfx("swipe")
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
