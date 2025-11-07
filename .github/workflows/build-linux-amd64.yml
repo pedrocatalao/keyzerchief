@@ -19,14 +19,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libncurses-dev
+          sudo apt-get install -y libasound2-dev libncurses-dev libncursesw6
           python -m pip install --upgrade pip
           pip install pyinstaller
+
+      - name: Verify curses italic support
+        run: |
+          python - <<'PY'
+          import curses
+          if not hasattr(curses, "A_ITALIC"):
+              raise SystemExit("curses on this runner is missing A_ITALIC support")
+          PY
 
       - name: Build binary
         run: |
