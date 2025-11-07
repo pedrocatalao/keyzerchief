@@ -49,7 +49,7 @@ Everything is written with the Python standard library and relies on `curses` fo
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/<your-org>/keyzerchief.git
+   git clone https://github.com/pedrocatalao/keyzerchief.git
    cd keyzerchief
    ```
 2. (Recommended) Create and activate a virtual environment:
