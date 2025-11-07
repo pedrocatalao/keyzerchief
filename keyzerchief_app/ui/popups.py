@@ -157,7 +157,7 @@ def popup_form(
     default_values: Optional[dict[int, str]] = None,
     placeholder_values: Optional[dict[int, str]] = None,
     buttons: Optional[list[str]] = None,
-    rolling: bool = False,
+    rolling_fields: Optional[list[int]] = None,
 ):
     """Collect user input using a vertical form."""
     height, width = stdscr.getmaxyx()
@@ -170,6 +170,7 @@ def popup_form(
     file_fields = file_fields or []
     masked_fields = masked_fields or []
     choice_fields = choice_fields or []
+    rolling_fields = set(rolling_fields or [])
     dependencies = dependencies or {}
     choice_labels = choice_labels or {i: ("Yes", "No") for i in choice_fields}
     default_values = default_values or {}
@@ -214,16 +215,10 @@ def popup_form(
                 selected_value = values[i]
                 win.addstr(y, field_start_x - len(label) + 2, label)
 
-                if rolling:
-                    display_width = win_width - field_start_x - 5
+                if i in rolling_fields:
                     attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_MENU)
-                    display_text = f" {selected_value} "
-                    win.addstr(
-                        y,
-                        field_start_x + 3,
-                        display_text.ljust(display_width),
-                        attr,
-                    )
+                    display_text = f"< {selected_value} >"
+                    win.addstr(y, field_start_x + 3, display_text, attr)
                 else:
                     x = field_start_x + 3
                     for opt in options:
@@ -269,7 +264,7 @@ def popup_form(
             if current in choice_fields:
                 options = choice_labels[current]
                 selected_index = options.index(values[current])
-                if rolling:
+                if current in rolling_fields:
                     x = field_start_x + 3
                 else:
                     x = field_start_x + 3 + sum(len(opt) + 3 for opt in options[:selected_index])
