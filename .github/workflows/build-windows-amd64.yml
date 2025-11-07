@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
@@ -43,3 +45,9 @@ jobs:
           name: keyzerchief-windows-amd64
           path: artifacts/keyzerchief-windows-amd64.exe
           if-no-files-found: error
+
+      - name: Publish release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/keyzerchief-windows-amd64.exe
