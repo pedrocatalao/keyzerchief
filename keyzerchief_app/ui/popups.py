@@ -152,8 +152,8 @@ def popup_form(
     file_fields: Optional[list[int]] = None,
     masked_fields: Optional[list[int]] = None,
     choice_fields: Optional[list[int]] = None,
-    dependencies: Optional[dict[int, tuple[int, str]]] = None,
-    choice_labels: Optional[dict[int, tuple[str, str]]] = None,
+    dependencies: Optional[dict[int, tuple[int, str | tuple[str, ...]]]] = None,
+    choice_labels: Optional[dict[int, tuple[str, ...]]] = None,
     default_values: Optional[dict[int, str]] = None,
     placeholder_values: Optional[dict[int, str]] = None,
     buttons: Optional[list[str]] = None,
@@ -197,7 +197,11 @@ def popup_form(
             dep = dependencies.get(i)
             if dep:
                 dep_idx, expected = dep
-                if values[dep_idx] != expected:
+                if isinstance(expected, (tuple, list)):
+                    expected_values = tuple(expected)
+                else:
+                    expected_values = (expected,)
+                if values[dep_idx] not in expected_values:
                     continue
 
             visible_fields.append(i)

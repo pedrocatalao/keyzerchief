@@ -14,6 +14,7 @@ from .keystore import check_unsaved_changes, find_entry_index_by_alias, get_keys
 from .keystore_actions import (
     change_keystore_password,
     delete_entry,
+    generate_key_pair,
     import_cert_file,
     import_cert_from_url,
     import_pkcs12_keypair,
@@ -159,7 +160,15 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
             highlight_footer_key(stdscr, key - curses.KEY_F1)
 
-            if key == curses.KEY_F3:
+            if key == curses.KEY_F2:
+                draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+                alias = generate_key_pair(stdscr, state)
+                if alias:
+                    entries = get_keystore_entries(state)
+                    selected = find_entry_index_by_alias(entries, alias)
+                    check_unsaved_changes(state)
+
+            elif key == curses.KEY_F3:
                 draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = import_cert_file(stdscr, state)
                 if alias:
