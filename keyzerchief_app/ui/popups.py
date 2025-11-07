@@ -186,6 +186,36 @@ def popup_form(
     win.keypad(True)
     field_start_x = max(len(label) for label in labels)
 
+    choice_offsets: dict[int, int] = {i: 0 for i in choice_fields}
+    visible_choice_ranges: dict[int, tuple[int, int]] = {}
+
+    def compute_visible_options(field_idx: int, offset: int) -> list[tuple[int, str]]:
+        options = choice_labels.get(field_idx, ("Yes", "No"))
+        if not options:
+            return []
+
+        max_offset = len(options) - 1
+        offset = max(0, min(offset, max_offset))
+        x = field_start_x + 3
+        max_x = win_width - 4
+        visible: list[tuple[int, str]] = []
+        idx = offset
+
+        while idx < len(options):
+            opt = options[idx]
+            if x + len(opt) + 1 > max_x:
+                if not visible:
+                    visible.append((idx, opt))
+                break
+            visible.append((idx, opt))
+            x += len(opt) + 3
+            idx += 1
+
+        if not visible:
+            visible.append((offset, options[offset]))
+
+        return visible
+
     while True:
         popup_box(win, title)
 
@@ -213,8 +243,23 @@ def popup_form(
                 selected_value = values[i]
                 win.addstr(y, field_start_x - len(label) + 2, label)
 
+                visible_options = compute_visible_options(i, choice_offsets.get(i, 0))
+                if visible_options:
+                    choice_offsets[i] = visible_options[0][0]
+                    visible_choice_ranges[i] = (
+                        visible_options[0][0],
+                        visible_options[-1][0],
+                    )
+                else:
+                    visible_choice_ranges[i] = (0, 0)
+
                 x = field_start_x + 3
-                for opt in options:
+                show_left = visible_options[0][0] > 0 if visible_options else False
+                show_right = (
+                    visible_options[-1][0] < len(options) - 1 if visible_options else False
+                )
+
+                for idx, opt in visible_options:
                     attr = curses.A_NORMAL
                     if is_selected and selected_value == opt:
                         attr |= curses.A_REVERSE
@@ -223,6 +268,12 @@ def popup_form(
 
                     win.addstr(y, x, f" {opt} ", attr)
                     x += len(opt) + 3
+
+                if is_selected and show_right and x <= win_width - 3:
+                    win.addstr(y, min(x, win_width - 5), "》", curses.A_NORMAL)
+
+                if is_selected and show_left and x - 2 >= 2:
+                    win.addstr(y, len(label) + 2, "《", curses.A_NORMAL)
             else:
                 val = values[i] if i not in masked_fields else "*" * len(values[i])
 
@@ -283,11 +334,33 @@ def popup_form(
                     selected_button = 0
             elif current in choice_fields:
                 opts = choice_labels.get(current, ("Yes", "No"))
-                idx = opts.index(values[current])
-                if key == curses.KEY_LEFT:
-                    values[current] = opts[(idx - 1) % len(opts)]
-                elif key == curses.KEY_RIGHT:
-                    values[current] = opts[(idx + 1) % len(opts)]
+                if not opts:
+                    continue
+
+                try:
+                    idx = opts.index(values[current])
+                except ValueError:
+                    idx = 0
+                    values[current] = opts[idx]
+
+                visible_range = visible_choice_ranges.get(current)
+
+                if key == curses.KEY_LEFT and idx > 0:
+                    new_idx = idx - 1
+                    if visible_range and idx == visible_range[0] and visible_range[0] > 0:
+                        choice_offsets[current] = visible_range[0] - 1
+                    elif new_idx < choice_offsets.get(current, 0):
+                        choice_offsets[current] = new_idx
+                    values[current] = opts[new_idx]
+                elif key == curses.KEY_RIGHT and idx < len(opts) - 1:
+                    new_idx = idx + 1
+                    if (
+                        visible_range
+                        and idx == visible_range[1]
+                        and visible_range[1] < len(opts) - 1
+                    ):
+                        choice_offsets[current] = visible_range[0] + 1
+                    values[current] = opts[new_idx]
             elif key in [curses.KEY_BACKSPACE, 127, 8]:
                 values[current] = values[current][:-1]
             elif 32 <= key <= 126 and len(values[current]) < 60:
