@@ -259,9 +259,6 @@ def popup_form(
                     visible_options[-1][0] < len(options) - 1 if visible_options else False
                 )
 
-                if show_left and x - 2 >= 2:
-                    win.addstr(y, x - 2, "<", curses.A_DIM)
-
                 for idx, opt in visible_options:
                     attr = curses.A_NORMAL
                     if is_selected and selected_value == opt:
@@ -272,8 +269,11 @@ def popup_form(
                     win.addstr(y, x, f" {opt} ", attr)
                     x += len(opt) + 3
 
-                if show_right and x <= win_width - 3:
-                    win.addstr(y, min(x, win_width - 4), ">", curses.A_DIM)
+                if is_selected and show_right and x <= win_width - 3:
+                    win.addstr(y, min(x, win_width - 5), "》", curses.A_NORMAL)
+
+                if is_selected and show_left and x - 2 >= 2:
+                    win.addstr(y, len(label) + 2, "《", curses.A_NORMAL)
             else:
                 val = values[i] if i not in masked_fields else "*" * len(values[i])
 
