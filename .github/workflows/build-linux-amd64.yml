@@ -39,23 +39,10 @@ jobs:
               raise SystemExit("curses on this runner is missing A_ITALIC support")
           PY
 
-      - name: Create dummy afplay script
-        run: |
-          mkdir -p bin
-          cat > bin/afplay <<'EOF'
-          #!/usr/bin/env bash
-          # Dummy afplay for Linux environments — does nothing and exits cleanly.
-          exit 0
-          EOF
-          chmod +x bin/afplay
-          echo "Dummy afplay created:"
-          ls -l bin
-
       - name: Build binary with afplay bundled
         run: |
           pyinstaller --onefile --name keyzerchief \
             --add-data "sfx:sfx" \
-            --add-binary "bin/afplay:bin" \
             keyzerchief
 
       - name: Prepare artifact
