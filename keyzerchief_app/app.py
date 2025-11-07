@@ -24,7 +24,7 @@ from .keystore_actions import (
 from .menu import menu_modal
 from .state import AppState
 from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
-from .ui.popups import prompt_import_key_type
+from .ui.popups import prompt_import_key_type, show_help_popup
 
 
 def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
@@ -160,7 +160,11 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
             highlight_footer_key(stdscr, key - curses.KEY_F1)
 
-            if key == curses.KEY_F2:
+            if key == curses.KEY_F1:
+                draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+                show_help_popup(stdscr)
+
+            elif key == curses.KEY_F2:
                 draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
                 alias = generate_key_pair(stdscr, state)
                 if alias:
