@@ -1,0 +1,45 @@
+name: Build Linux (amd64) Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libncurses-dev
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build binary
+        run: |
+          pyinstaller --onefile --name keyzerchief \
+            --add-data "sfx:sfx" \
+            keyzerchief
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifacts
+          mv dist/keyzerchief artifacts/keyzerchief-linux-amd64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyzerchief-linux-amd64
+          path: artifacts/keyzerchief-linux-amd64
+          if-no-files-found: error
