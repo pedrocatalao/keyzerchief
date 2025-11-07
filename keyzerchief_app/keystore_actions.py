@@ -334,8 +334,8 @@ def generate_key_pair(stdscr: "curses.window", state: AppState) -> Optional[str]
         signature_alg,
     ]
 
-    if algorithm == "EC":
-        cmd += ["-groupname", named_curve]
+    if algorithm == "EC" and named_curve == "prime256v1":
+        cmd += ["-groupname", "secp256r1"]
     else:
         cmd += ["-keysize", str(key_size)]
 
