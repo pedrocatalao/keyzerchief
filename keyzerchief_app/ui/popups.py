@@ -384,6 +384,105 @@ def popup_form(
                 in_buttons = False
 
 
+def show_help_popup(stdscr: "curses.window") -> None:
+    """Display the keyboard shortcut reference dialog."""
+    key_col_width = 16
+
+    def format_item(shortcut: str, description: str) -> str:
+        return f"  {shortcut:<{key_col_width}} {description}"
+
+    help_lines = [
+        "Navigation:",
+        format_item("↑ / ↓", "Move through entries or scroll details"),
+        format_item("Tab", "Switch between entries and details panels"),
+        format_item("t", "Jump to the first entry / top of details"),
+        format_item("b", "Jump to the last entry / bottom of details"),
+        format_item("Mouse click", "Activate a panel (if mouse support is enabled)"),
+        format_item("Mouse wheel", "Scroll the active panel"),
+        "",
+        "Function keys:",
+        format_item("F1", "Show this help window"),
+        format_item("F2", "Generate a new key pair"),
+        format_item("F3", "Import a certificate from file"),
+        format_item("F4", "Import a PKCS #12 or PKCS #8 key pair"),
+        format_item("F5", "Import a certificate from URL"),
+        format_item("F6", "Change the keystore password"),
+        format_item("F7", "Save keystore changes"),
+        format_item("F8", "Delete the selected entry"),
+        format_item("F9", "Open the menu bar"),
+        format_item("F10", "Save changes and exit"),
+        "",
+        "General:",
+        format_item("Enter", "Activate a highlighted menu option or confirm dialogs"),
+        format_item("q / Esc", "Prompt to quit and optionally save changes"),
+        format_item("Menu actions", "Filter, open keystore, toggle mouse, search content, quit"),
+    ]
+
+    height, width = stdscr.getmaxyx()
+    content_width = max(len(line) for line in help_lines)
+    available_width = max(20, width - 2)
+    target_width = max(70, content_width + 4)
+    win_width = min(target_width, available_width)
+    if available_width >= 60:
+        win_width = max(win_width, 60)
+
+    available_height = max(6, height - 2)
+    target_height = max(18, len(help_lines) + 4)
+    win_height = min(target_height, available_height)
+
+    start_y = max(0, (height - win_height) // 2)
+    start_x = max(0, (width - win_width) // 2)
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
+
+    view_height = max(1, win_height - 5)
+    max_offset = max(0, len(help_lines) - view_height)
+    scroll_offset = 0
+
+    while True:
+        popup_box(win, "Help & Shortcuts")
+        clear_window(win)
+
+        header = "Keyboard shortcuts and options"
+        win.addstr(1, 2, header[: win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
+
+        for idx in range(view_height):
+            line_idx = scroll_offset + idx
+            y = 2 + idx
+            win.move(y, 2)
+            win.clrtoeol()
+            if line_idx >= len(help_lines):
+                continue
+            line = help_lines[line_idx]
+            attr = curses.color_pair(COLOR_PAIR_HEADER) if line.endswith(":") else curses.A_NORMAL
+            win.addstr(y, 2, line[: win_width - 4], attr)
+
+        instructions = "Use ↑/↓ or PgUp/PgDn to scroll. Enter or Esc to close."
+        win.addstr(win_height - 2, 2, instructions[: win_width - 4], curses.color_pair(COLOR_PAIR_FIELD))
+        win.refresh()
+
+        key = win.getch()
+
+        if key in (27, ord("q"), ord("Q"), 10, 13):
+            break
+        if key == curses.KEY_UP and scroll_offset > 0:
+            scroll_offset -= 1
+        elif key == curses.KEY_DOWN and scroll_offset < max_offset:
+            scroll_offset += 1
+        elif key == curses.KEY_PPAGE and scroll_offset > 0:
+            scroll_offset = max(0, scroll_offset - view_height)
+        elif key == curses.KEY_NPAGE and scroll_offset < max_offset:
+            scroll_offset = min(max_offset, scroll_offset + view_height)
+        elif key == curses.KEY_HOME:
+            scroll_offset = 0
+        elif key == curses.KEY_END:
+            scroll_offset = max_offset
+
+    win.clear()
+    win.refresh()
+
+
 def prompt_import_key_type(stdscr: "curses.window") -> Optional[str]:
     """Display a small menu to choose the key import type."""
     key_types = ["PKCS #12", "PKCS #8", "PVK", "OpenSSL"]
