@@ -105,7 +105,7 @@ For packaging to PyPI, add your preferred build backend (`setuptools`, `poetry`,
 ## Troubleshooting
 - **`keytool: command not found`** – Install a JDK (e.g., [Adoptium Temurin](https://adoptium.net/)) and export its `bin` directory to `PATH`.
 - **`_curses` module missing** – On macOS install via `brew install python@3.x`; on Debian/Ubuntu `sudo apt install python3-curses`.
-- **Terminal colors look off** – Ensure your terminal supports 256 colors and disable themes that force limited palettes.
+- **Terminal colors look off** – Ensure your terminal supports 256 colors and disable themes that force limited palettes; Make sure you do `export TERM=xterm-256color` in you shell profile.
 - **No sound** – Audio cues are macOS-only; other systems skip playback.
 
 ## Contributing
