@@ -52,7 +52,7 @@ def intro_window(stdscr: "curses.window") -> "curses.window":
     popup_box(intro_win, "")
     curses.noecho()
     play_sfx("intro")
-    title = "Keyzer Chief 1.7"
+    title = "Keyzer Chief 2.1.0"
     for i in range(len(title)):
         intro_win.addstr(4, 26, title[: i + 1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
         intro_win.refresh()
