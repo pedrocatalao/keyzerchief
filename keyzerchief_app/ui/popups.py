@@ -422,7 +422,7 @@ def show_help_popup(stdscr: "curses.window") -> None:
     content_width = max(len(line) for line in help_lines)
     available_width = max(20, width - 2)
     target_width = max(70, content_width + 4)
-    win_width = min(target_width, available_width)
+    win_width = min(target_width, available_width + 1)
     if available_width >= 60:
         win_width = max(win_width, 60)
 
@@ -444,14 +444,10 @@ def show_help_popup(stdscr: "curses.window") -> None:
         popup_box(win, "Help & Shortcuts")
         clear_window(win)
 
-        header = "Keyboard shortcuts and options"
-        win.addstr(1, 2, header[: win_width - 4], curses.color_pair(COLOR_PAIR_MENU))
-
         for idx in range(view_height):
             line_idx = scroll_offset + idx
             y = 2 + idx
             win.move(y, 2)
-            win.clrtoeol()
             if line_idx >= len(help_lines):
                 continue
             line = help_lines[line_idx]
