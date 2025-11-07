@@ -7,7 +7,15 @@ import os
 import time
 from typing import Iterable, Optional
 
-from ..constants import BUTTON_SPACING, COLOR_PAIR_DARKER, COLOR_PAIR_FIELD, COLOR_PAIR_HEADER, COLOR_PAIR_MENU
+from ..constants import (
+    BUTTON_SPACING,
+    COLOR_PAIR_DARKER,
+    COLOR_PAIR_EXPIRED,
+    COLOR_PAIR_FIELD,
+    COLOR_PAIR_HEADER,
+    COLOR_PAIR_MENU,
+    COLOR_PAIR_SELECTED,
+)
 
 
 def popup_box(win: "curses.window", title: str) -> None:
@@ -97,11 +105,11 @@ def file_picker(
             size_str = f"{size:,}" if not is_dir else "<DIR>"
             name_str = f"{entry}/" if is_dir else entry
             if is_selected:
-                attr = curses.color_pair(COLOR_PAIR_MENU)
+                attr = curses.color_pair(COLOR_PAIR_SELECTED)
             elif is_cert:
                 attr = curses.color_pair(COLOR_PAIR_HEADER)
             elif is_key:
-                attr = curses.color_pair(COLOR_PAIR_FIELD)
+                attr = curses.color_pair(COLOR_PAIR_EXPIRED)
             else:
                 attr = curses.A_NORMAL
 
