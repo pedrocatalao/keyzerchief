@@ -561,10 +561,11 @@ def import_cert_from_url(stdscr):
     result = subprocess.run(import_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return handle_import_result(alias, result, win)
 
-def delete_entry(alias):
+def delete_entry(alias, stdscr):
+    height, width = stdscr.getmaxyx()
     confirm_height, confirm_width = 8, 60
-    confirm_y = (curses.LINES - confirm_height) // 2
-    confirm_x = (curses.COLS - confirm_width) // 2
+    confirm_y = (height - confirm_height) // 2
+    confirm_x = (width - confirm_width) // 2
     confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
     confirm_win.keypad(True)
     popup_box(confirm_win, "Delete entry?")
@@ -696,12 +697,13 @@ def check_unsaved_changes():
     with open(ORIGINAL_KEYSTORE_PATH, 'rb') as file1, open(KEYSTORE_PATH, 'rb') as file2:
         HAS_UNSAVED_CHANGES = file1.read() != file2.read()
 
-def save_changes():
+def save_changes(stdscr):
     global HAS_UNSAVED_CHANGES
     if HAS_UNSAVED_CHANGES:
         confirm_height, confirm_width = 7, 50
-        confirm_y = (curses.LINES - confirm_height) // 2
-        confirm_x = (curses.COLS - confirm_width) // 2
+        height, width = stdscr.getmaxyx()
+        confirm_y = (height - confirm_height) // 2
+        confirm_x = (width - confirm_width) // 2
         confirm_win = curses.newwin(confirm_height, confirm_width, confirm_y, confirm_x)
         confirm_win.keypad(True)
         popup_box(confirm_win, "Save changes?")
@@ -977,7 +979,7 @@ def menu_modal(stdscr, active_menu=0, redraw_main_ui=None):
                         elif selected_label == "Open keystore":
                             open_keystore(stdscr, None)
                         elif selected_label == "Quit":
-                            save_changes()
+                            save_changes(stdscr)
                             exit(0)
                         elif selected_label == "Enable/Disable mouse":
                             handle_toggle_mouse()
@@ -1040,7 +1042,7 @@ def menu_modal(stdscr, active_menu=0, redraw_main_ui=None):
                 submenu_win.clear()
                 draw_menu_bar(None, width)
                 redraw_main_ui()
-                save_changes()
+                save_changes(stdscr)
                 exit(0)
             elif selected_label == "Enable/Disable mouse":
                 submenu_win.clear()
@@ -1061,7 +1063,7 @@ def menu_modal(stdscr, active_menu=0, redraw_main_ui=None):
             return None, None
 
         elif key == curses.KEY_F10:
-            save_changes()
+            save_changes(stdscr)
             exit(0)
 
 def open_keystore(stdscr, keystore_path):
@@ -1069,7 +1071,7 @@ def open_keystore(stdscr, keystore_path):
     prev_keystore_path = None
     if KEYSTORE_PATH != "":
         prev_keystore_path = KEYSTORE_PATH
-        save_changes()
+        save_changes(stdscr)
 
     KEYSTORE_PATH = ""
 
@@ -1584,11 +1586,11 @@ def main(stdscr):
 
             elif key == curses.KEY_F7:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                save_changes()
+                save_changes(stdscr)
 
             elif key == curses.KEY_F8:
                 draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True)
-                delete_entry(entries[selected].get("Alias name"))
+                delete_entry(entries[selected].get("Alias name"), stdscr)
                 entries = get_keystore_entries()
                 selected = min(selected, len(entries) - 1)
 
@@ -1597,7 +1599,7 @@ def main(stdscr):
                 menu_modal(stdscr, 0, redraw_main_ui=lambda: draw_ui(stdscr, entries, selected, scroll_offset, detail_scroll, active_panel, True))
 
             elif key in [curses.KEY_F10, ord('q'), ord('Q'), 27]:
-                ret = save_changes()
+                ret = save_changes(stdscr)
                 if ret is None:
                     break
 
