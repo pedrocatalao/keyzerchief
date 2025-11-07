@@ -24,9 +24,6 @@ from ..keystore import check_password
 from ..state import AppState
 
 
-ITALIC_ATTR = getattr(curses, "A_ITALIC", 0)
-
-
 ASCII_ART_BASE64 = "H4sIAAAAAAAC/+NSAIJH09phqAOG4CITuUAKOpDQRIgeFCEuNAHsynCobEdFROjowK2cXDvQ3YpVKVidAlb3dIF8jCTdC+SjSeOQnYhb18BqQUjBZBtAIgAb0FSANAIAAA=="
 
 
@@ -60,7 +57,7 @@ def intro_window(stdscr: "curses.window") -> "curses.window":
         intro_win.addstr(4, 26, title[: i + 1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
         intro_win.refresh()
         curses.napms(9)
-    intro_win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_CYAN) | ITALIC_ATTR)
+    intro_win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_CYAN) | curses.A_ITALIC)
     intro_win.addstr(14, 22, "Keystore password:")
     return intro_win
 
