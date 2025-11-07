@@ -21,10 +21,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libncurses-dev libncursesw6
+          sudo apt-get install -y \
+            libasound2-dev \
+            libncurses-dev \
+            libncursesw6
           python -m pip install --upgrade pip
           pip install pyinstaller
 
@@ -36,10 +39,23 @@ jobs:
               raise SystemExit("curses on this runner is missing A_ITALIC support")
           PY
 
-      - name: Build binary
+      - name: Create dummy afplay script
+        run: |
+          mkdir -p bin
+          cat > bin/afplay <<'EOF'
+          #!/usr/bin/env bash
+          # Dummy afplay for Linux environments — does nothing and exits cleanly.
+          exit 0
+          EOF
+          chmod +x bin/afplay
+          echo "Dummy afplay created:"
+          ls -l bin
+
+      - name: Build binary with afplay bundled
         run: |
           pyinstaller --onefile --name keyzerchief \
             --add-data "sfx:sfx" \
+            --add-binary "bin/afplay:bin" \
             keyzerchief
 
       - name: Prepare artifact
