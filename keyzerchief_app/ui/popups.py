@@ -157,6 +157,7 @@ def popup_form(
     default_values: Optional[dict[int, str]] = None,
     placeholder_values: Optional[dict[int, str]] = None,
     buttons: Optional[list[str]] = None,
+    rolling: bool = False,
 ):
     """Collect user input using a vertical form."""
     height, width = stdscr.getmaxyx()
@@ -213,16 +214,27 @@ def popup_form(
                 selected_value = values[i]
                 win.addstr(y, field_start_x - len(label) + 2, label)
 
-                x = field_start_x + 3
-                for opt in options:
-                    attr = curses.A_NORMAL
-                    if is_selected and selected_value == opt:
-                        attr |= curses.A_REVERSE
-                    elif not is_selected and selected_value == opt:
-                        attr = curses.color_pair(COLOR_PAIR_MENU)
+                if rolling:
+                    display_width = win_width - field_start_x - 5
+                    attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_MENU)
+                    display_text = f" {selected_value} "
+                    win.addstr(
+                        y,
+                        field_start_x + 3,
+                        display_text.ljust(display_width),
+                        attr,
+                    )
+                else:
+                    x = field_start_x + 3
+                    for opt in options:
+                        attr = curses.A_NORMAL
+                        if is_selected and selected_value == opt:
+                            attr |= curses.A_REVERSE
+                        elif not is_selected and selected_value == opt:
+                            attr = curses.color_pair(COLOR_PAIR_MENU)
 
-                    win.addstr(y, x, f" {opt} ", attr)
-                    x += len(opt) + 3
+                        win.addstr(y, x, f" {opt} ", attr)
+                        x += len(opt) + 3
             else:
                 val = values[i] if i not in masked_fields else "*" * len(values[i])
 
@@ -257,7 +269,10 @@ def popup_form(
             if current in choice_fields:
                 options = choice_labels[current]
                 selected_index = options.index(values[current])
-                x = field_start_x + 3 + sum(len(opt) + 3 for opt in options[:selected_index])
+                if rolling:
+                    x = field_start_x + 3
+                else:
+                    x = field_start_x + 3 + sum(len(opt) + 3 for opt in options[:selected_index])
                 win.move(y, x + 1)
             else:
                 val = values[current] if current not in masked_fields else "*" * len(values[current])

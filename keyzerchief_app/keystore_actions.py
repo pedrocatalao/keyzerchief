@@ -249,6 +249,7 @@ def generate_key_pair(stdscr: "curses.window", state: AppState) -> Optional[str]
                 5: default_alias,
             },
             placeholder_values={2: "YYYY-MM-DD", 3: "YYYY-MM-DD"},
+            rolling=True,
         )
 
         if not details_form:
