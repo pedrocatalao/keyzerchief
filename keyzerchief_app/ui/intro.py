@@ -1,6 +1,7 @@
 """Introductory window and logo rendering."""
 
 from __future__ import annotations
+from keyzerchief_app import __version__
 
 import base64
 import curses
@@ -52,7 +53,7 @@ def intro_window(stdscr: "curses.window") -> "curses.window":
     popup_box(intro_win, "")
     curses.noecho()
     play_sfx("intro")
-    title = "Keyzer Chief 2.1.0"
+    title = f"Keyzer Chief {__version__}"
     for i in range(len(title)):
         intro_win.addstr(4, 26, title[: i + 1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
         intro_win.refresh()
