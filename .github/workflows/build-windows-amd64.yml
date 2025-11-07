@@ -19,12 +19,22 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
+          pip install pyinstaller "windows-curses>=2.3.2"
+
+      - name: Verify curses italic support
+        shell: bash
+        run: |
+          python - <<'PY'
+          import curses
+          if not hasattr(curses, "A_ITALIC"):
+              raise SystemExit("curses on this runner is missing A_ITALIC support")
+          PY
 
       - name: Build binary
         shell: bash
