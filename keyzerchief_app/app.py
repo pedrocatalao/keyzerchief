@@ -215,7 +215,12 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     ),
                 )
 
-        elif key in [curses.KEY_F10, ord("q"), ord("Q"), 27]:
+            elif key == curses.KEY_F10:
+                result = save_changes(stdscr, state)
+                if result is None:
+                    break
+
+        elif key in [ord("q"), ord("Q"), 27]:
             ret = save_changes(stdscr, state)
             if ret is None:
                 break

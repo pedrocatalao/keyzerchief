@@ -16,6 +16,7 @@ from ..constants import (
     COLOR_PAIR_FKEYS,
     COLOR_PAIR_HEADER,
     COLOR_PAIR_MENU,
+    COLOR_PAIR_WHITE_DIM,
     LOGO_X,
     LOGO_Y,
 )
@@ -53,7 +54,7 @@ def intro_window(stdscr: "curses.window") -> "curses.window":
     play_sfx("intro")
     title = "Keyzer Chief 1.7"
     for i in range(len(title)):
-        intro_win.addstr(4, 26, title[: i + 1], curses.color_pair(COLOR_PAIR_HEADER) | curses.A_BOLD)
+        intro_win.addstr(4, 26, title[: i + 1], curses.color_pair(COLOR_PAIR_WHITE_DIM) | curses.A_BOLD)
         intro_win.refresh()
         curses.napms(9)
     intro_win.addstr(5, 24, "Java Keystore Manager", curses.color_pair(COLOR_PAIR_CYAN) | curses.A_ITALIC)
