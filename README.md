@@ -6,6 +6,7 @@ Keyzerchief is a terminal user interface (TUI) for exploring and managing Java k
 
 ## Table of contents
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Architecture at a glance](#architecture-at-a-glance)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -25,6 +26,12 @@ Keyzerchief is a terminal user interface (TUI) for exploring and managing Java k
 - 🔑 **Password management** including opening password-protected keystores and changing the store password.
 - 🧹 **Housekeeping tools** such as deleting entries, saving modifications, and browsing with a built-in file picker.
 - 🔔 **Ambient audio cues** (macOS `afplay`) to celebrate key actions—optional but delightful.
+
+## Screenshots
+
+| Overview | Command menu |
+| --- | --- |
+| ![Screenshot of the dual-pane Keyzerchief interface highlighting aliases and certificate details.](docs/images/overview.svg) | ![Screenshot of the Keyzerchief command menu showing contextual keystore actions.](docs/images/context-menu.svg) |
 
 ## Architecture at a glance
 ```

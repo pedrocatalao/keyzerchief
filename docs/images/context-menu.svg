@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#1a1f2b" />
+      <stop offset="1" stop-color="#0f141b" />
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Fira Code', 'Courier New', monospace; fill: #fbbf24; }
+      .menu-bar { font: 500 22px 'Fira Code', 'Courier New', monospace; fill: #cbd5f5; }
+      .menu-option { font: 400 20px 'Fira Code', 'Courier New', monospace; fill: #f9fafb; }
+      .menu-option .hint { fill: #34d399; }
+      .menu-option .danger { fill: #f87171; }
+      .pane { font: 400 18px 'Fira Code', 'Courier New', monospace; fill: #94a3b8; }
+      .footer { font: 400 18px 'Fira Code', 'Courier New', monospace; fill: #9ca3af; }
+    </style>
+  </defs>
+  <rect width="1200" height="750" fill="url(#bg)" rx="28" />
+  <rect x="60" y="60" width="1080" height="630" fill="#0b1220" stroke="#9333ea" stroke-width="3" rx="18" />
+
+  <text x="90" y="110" class="title">Keyzerchief — Command menu</text>
+  <text x="90" y="150" class="menu-bar">File   Edit   Tools   View   Help</text>
+
+  <rect x="120" y="190" width="360" height="360" fill="#1f2937" stroke="#4c1d95" stroke-width="2" rx="12" />
+  <text x="150" y="230" class="menu-option">Import certificate      <tspan class="hint">⌘I</tspan></text>
+  <text x="150" y="270" class="menu-option">Import key pair         <tspan class="hint">⌘K</tspan></text>
+  <text x="150" y="310" class="menu-option">Export selected         <tspan class="hint">⌘E</tspan></text>
+  <text x="150" y="350" class="menu-option">Change password…        <tspan class="hint">⌘P</tspan></text>
+  <text x="150" y="390" class="menu-option">Duplicate entry          <tspan class="hint">⌘D</tspan></text>
+  <text x="150" y="430" class="menu-option">Delete entry             <tspan class="danger">⌘⌫</tspan></text>
+  <text x="150" y="470" class="menu-option">Save modifications       <tspan class="hint">⌘S</tspan></text>
+  <text x="150" y="510" class="menu-option">Close keystore           <tspan class="hint">⌘W</tspan></text>
+
+  <rect x="520" y="190" width="540" height="360" fill="#111827" stroke="#4c1d95" stroke-width="2" rx="12" />
+  <text x="550" y="230" class="pane">Use the menu (F10) or click the top bar to open contextual commands.</text>
+  <text x="550" y="270" class="pane">Items display familiar shortcuts and highlight destructive actions.</text>
+  <text x="550" y="310" class="pane">All changes stay in memory until you save the keystore back to disk.</text>
+  <text x="550" y="350" class="pane">Mouse scroll wheels and left-clicks are supported in every popup.</text>
+  <text x="550" y="390" class="pane">Dismiss any dialog with Esc or choose Cancel using arrow keys.</text>
+
+  <text x="90" y="690" class="footer">Tip: Audio confirmations play via afplay on macOS when actions complete.</text>
+</svg>

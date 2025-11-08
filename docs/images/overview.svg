@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#1f2933" />
+      <stop offset="1" stop-color="#11161c" />
+    </linearGradient>
+    <style>
+      .title { font: 700 36px 'Fira Code', 'Courier New', monospace; fill: #facc15; }
+      .subtitle { font: 500 22px 'Fira Code', 'Courier New', monospace; fill: #9ca3af; }
+      .pane-title { font: 600 24px 'Fira Code', 'Courier New', monospace; fill: #34d399; }
+      .pane-item { font: 400 20px 'Fira Code', 'Courier New', monospace; fill: #e5e7eb; }
+      .pane-item.expired { fill: #f87171; }
+      .detail-label { font: 600 20px 'Fira Code', 'Courier New', monospace; fill: #93c5fd; }
+      .detail-value { font: 400 20px 'Fira Code', 'Courier New', monospace; fill: #f9fafb; }
+      .badge { font: 600 18px 'Fira Code', 'Courier New', monospace; fill: #0ea5e9; }
+      .footer { font: 400 18px 'Fira Code', 'Courier New', monospace; fill: #9ca3af; }
+    </style>
+  </defs>
+  <rect width="1200" height="750" fill="url(#bg)" rx="28" />
+  <rect x="60" y="60" width="1080" height="630" fill="#0b1220" stroke="#2563eb" stroke-width="3" rx="18" />
+  <rect x="80" y="120" width="420" height="520" fill="#111827" stroke="#1f2937" stroke-width="2" rx="12" />
+  <rect x="520" y="120" width="600" height="520" fill="#111827" stroke="#1f2937" stroke-width="2" rx="12" />
+
+  <text x="90" y="110" class="title">Keyzerchief — Demo Keystore</text>
+  <text x="90" y="160" class="pane-title">Aliases ▸</text>
+  <text x="110" y="200" class="pane-item">api-service</text>
+  <text x="110" y="240" class="pane-item">internal-ca</text>
+  <text x="110" y="280" class="pane-item expired">legacy-gateway  ⏰</text>
+  <text x="110" y="320" class="pane-item">partner-edge</text>
+  <text x="110" y="360" class="pane-item">saml-idp</text>
+  <text x="110" y="400" class="pane-item">tls-frontend</text>
+  <text x="110" y="440" class="pane-item">vault-replica</text>
+  <text x="110" y="520" class="subtitle">Filter ▸ /  ·  Jump ▸ t / b  ·  Menu ▸ F10</text>
+
+  <text x="540" y="160" class="pane-title">Certificate details</text>
+  <text x="540" y="210" class="detail-label">Subject:</text>
+  <text x="720" y="210" class="detail-value">CN=api.service.local</text>
+  <text x="540" y="250" class="detail-label">Issuer:</text>
+  <text x="720" y="250" class="detail-value">CN=Keyzerchief CA</text>
+  <text x="540" y="290" class="detail-label">Valid until:</text>
+  <text x="720" y="290" class="detail-value">Jun 14 2026 14:32:00 GMT</text>
+  <text x="540" y="330" class="detail-label">Signature:</text>
+  <text x="720" y="330" class="detail-value">SHA256withRSA</text>
+  <text x="540" y="370" class="detail-label">Fingerprints:</text>
+  <text x="720" y="370" class="detail-value">SHA1 · 2F:0B:7C:…</text>
+  <text x="720" y="410" class="detail-value">SHA256 · DF:19:8A:…</text>
+  <text x="540" y="470" class="badge">✔  Verified with chain</text>
+  <text x="540" y="510" class="badge">🔒  Private key present</text>
+
+  <text x="90" y="690" class="footer">Ctrl+M toggle mouse · Ctrl+F search details · Ctrl+C quit</text>
+</svg>
