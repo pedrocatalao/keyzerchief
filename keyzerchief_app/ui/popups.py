@@ -413,13 +413,13 @@ def show_help_popup(stdscr: "curses.window") -> None:
         format_item("F10", "Save changes and exit"),
         "",
         "Alternative shortcuts (hold Shift):",
-        format_item("Shift+F1", "Show this help window"),
-        format_item("Shift+F2", "Generate a new key pair"),
-        format_item("Shift+F3", "Import a PKCS #12 or PKCS #8 key pair"),
-        format_item("Shift+F4", "Import a certificate from file"),
-        format_item("Shift+F5", "Import a certificate from URL"),
-        format_item("Shift+F9", "Open the menu bar"),
-        format_item("Shift+F10", "Save changes and exit"),
+        format_item("F1", "Show this help window"),
+        format_item("F2", "Generate a new key pair"),
+        format_item("F3", "Import a PKCS #12 or PKCS #8 key pair"),
+        format_item("F4", "Import a certificate from file"),
+        format_item("F5", "Import a certificate from URL"),
+        format_item("F9", "Open the menu bar"),
+        format_item("F10", "Save changes and exit"),
         "",
         "General:",
         format_item("Enter", "Activate a highlighted menu option or confirm dialogs"),
@@ -435,7 +435,7 @@ def show_help_popup(stdscr: "curses.window") -> None:
     if available_width >= 60:
         win_width = max(win_width, 60)
 
-    available_height = max(6, height - 2)
+    available_height = max(6, height - 10)
     target_height = max(18, len(help_lines) + 4)
     win_height = min(target_height, available_height)
 
