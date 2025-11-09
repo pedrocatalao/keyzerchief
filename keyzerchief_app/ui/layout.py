@@ -23,7 +23,6 @@ from ..constants import (
     COLOR_PAIR_SELECTED_DIM_MORE,
     COLOR_PAIR_WHITE,
     COLOR_PAIR_WHITE_DIM,
-    FOOTER_OPTIONS,
     LEFT_PANEL,
     MENU_ITEMS,
     MENU_SPACING,
@@ -32,11 +31,13 @@ from ..constants import (
 from ..state import AppState
 
 
-def draw_footer(stdscr: "curses.window", state: AppState) -> None:
+def draw_footer(
+    stdscr: "curses.window", state: AppState, options: list[str]
+) -> None:
     """Render the footer with contextual shortcuts."""
     height, width = stdscr.getmaxyx()
-    spacing = width // len(FOOTER_OPTIONS)
-    for i, item in enumerate(FOOTER_OPTIONS):
+    spacing = width // len(options)
+    for i, item in enumerate(options):
         label = item[2:]
         prefix = item[:2]
         attr_key = (
@@ -48,11 +49,13 @@ def draw_footer(stdscr: "curses.window", state: AppState) -> None:
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
 
-def highlight_footer_key(stdscr: "curses.window", key_index: int) -> None:
+def highlight_footer_key(
+    stdscr: "curses.window", key_index: int, options: list[str]
+) -> None:
     """Briefly highlight a footer label when its key is pressed."""
     height, width = stdscr.getmaxyx()
-    spacing = width // len(FOOTER_OPTIONS)
-    label = FOOTER_OPTIONS[key_index][2:]
+    spacing = width // len(options)
+    label = options[key_index][2:]
     stdscr.addstr(
         height - 1,
         key_index * spacing + 2,
