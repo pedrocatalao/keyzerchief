@@ -60,17 +60,58 @@ _SHIFT_KEY_NAMES = {
 }
 
 
-def _is_shift_key(key: int) -> bool:
-    if key in SHIFT_KEYS:
-        return True
+_SHIFT_CANONICAL_NAMES = {
+    "KEY_SHIFT_L": "SHIFT_LEFT",
+    "KEY_SHIFT-L": "SHIFT_LEFT",
+    "KEY_LSHIFT": "SHIFT_LEFT",
+    "SHIFT_L": "SHIFT_LEFT",
+    "SHIFT_LEFT": "SHIFT_LEFT",
+    "SHIFT-L": "SHIFT_LEFT",
+    "KEY_SHIFT_R": "SHIFT_RIGHT",
+    "KEY_SHIFT-R": "SHIFT_RIGHT",
+    "KEY_RSHIFT": "SHIFT_RIGHT",
+    "SHIFT_R": "SHIFT_RIGHT",
+    "SHIFT_RIGHT": "SHIFT_RIGHT",
+    "SHIFT-R": "SHIFT_RIGHT",
+    "KEY_SHIFT": "SHIFT_GENERIC",
+    "SHIFT": "SHIFT_GENERIC",
+}
 
+
+def _canonicalize_shift_name(name: str) -> tuple[str, bool] | None:
+    normalized = name.upper().replace(" ", "_")
+    is_release = False
+
+    if normalized.startswith("KEY_RELEASE_"):
+        is_release = True
+        normalized = normalized[len("KEY_RELEASE_"):]
+    elif normalized.endswith("_RELEASE"):
+        is_release = True
+        normalized = normalized[: -len("_RELEASE")]
+
+    canonical = _SHIFT_CANONICAL_NAMES.get(normalized)
+    if canonical is None:
+        return None
+
+    return canonical, is_release
+
+
+def _identify_shift_key(key: int) -> tuple[str, bool] | None:
     try:
         key_name = curses.keyname(key)
     except curses.error:
-        return False
+        key_name = None
 
-    decoded = key_name.decode("ascii", "ignore")
-    return decoded in _SHIFT_KEY_NAMES
+    if key_name is not None:
+        decoded = key_name.decode("ascii", "ignore")
+        canonical = _canonicalize_shift_name(decoded)
+        if canonical is not None:
+            return canonical
+
+    if key in SHIFT_KEYS:
+        return (f"CODE_{key}", False)
+
+    return None
 
 
 def _build_shift_fkey_map() -> dict[int, int]:
@@ -181,20 +222,33 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
 
         shift_f_index = SHIFT_FKEY_MAP.get(key)
 
-        if _is_shift_key(key):
-            state.shift_mode = True
-            state.shift_latched = True
-            draw_footer(stdscr, state)
+        shift_key = _identify_shift_key(key)
+        if shift_key is not None:
+            identifier, is_release = shift_key
+
+            if is_release:
+                state.shift_keys_down.discard(identifier)
+            else:
+                state.shift_keys_down.add(identifier)
+
+            shift_active = bool(state.shift_keys_down)
+            if state.shift_mode != shift_active:
+                state.shift_mode = shift_active
+                draw_footer(stdscr, state)
             continue
 
         if shift_f_index is not None:
-            previous_shift_state = state.shift_mode
-            if not previous_shift_state:
+            temporary_shift = False
+            if not state.shift_mode:
                 state.shift_mode = True
                 draw_footer(stdscr, state)
+                temporary_shift = True
+
             highlight_footer_key(stdscr, shift_f_index, state)
-            state.shift_mode = False
-            state.shift_latched = False
+
+            if temporary_shift and not state.shift_keys_down:
+                state.shift_mode = False
+                draw_footer(stdscr, state)
             continue
 
         if key == curses.KEY_UP:
@@ -238,8 +292,9 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
             if state.shift_mode:
                 highlight_footer_key(stdscr, key - curses.KEY_F1, state)
-                state.shift_mode = False
-                state.shift_latched = False
+                if not state.shift_keys_down:
+                    state.shift_mode = False
+                    draw_footer(stdscr, state)
                 continue
 
             highlight_footer_key(stdscr, key - curses.KEY_F1, state)
@@ -321,10 +376,6 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             ret = save_changes(stdscr, state)
             if ret is None:
                 break
-
-        if state.shift_latched:
-            state.shift_mode = False
-            state.shift_latched = False
 
         if state.has_unsaved_changes and selected == len(entries) - 1:
             scroll_offset = max(0, len(entries) - panel_height)

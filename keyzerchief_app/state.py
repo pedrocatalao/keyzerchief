@@ -32,7 +32,7 @@ class AppState:
     right_panel_highlight_term: Optional[str] = None
     filter_state: dict[str, str] = field(default_factory=default_filter_state)
     shift_mode: bool = False
-    shift_latched: bool = False
+    shift_keys_down: set[str] = field(default_factory=set)
 
     def mark_dirty(self) -> None:
         self.has_unsaved_changes = True
