@@ -33,6 +33,8 @@ _H_CANONICAL_NAMES = {
     "H": "H",
     "KEY_H": "H",
     "KEY_DOWN_H": "H",
+    "KEY_PRESSED_H": "H",
+    "KEY_RELEASED_H": "H",
     "KEY_UP_H": "H",
 }
 
@@ -44,12 +46,18 @@ def _canonicalize_h_name(name: str) -> tuple[str, bool] | None:
     if normalized.startswith("KEY_RELEASE_"):
         is_release = True
         normalized = normalized[len("KEY_RELEASE_"):]
+    elif normalized.startswith("KEY_RELEASED_"):
+        is_release = True
+        normalized = normalized[len("KEY_RELEASED_"):]
     elif normalized.startswith("KEY_UP_"):
         is_release = True
         normalized = normalized[len("KEY_UP_"):]
     elif normalized.endswith("_RELEASE"):
         is_release = True
         normalized = normalized[: -len("_RELEASE")]
+    elif normalized.endswith("_RELEASED"):
+        is_release = True
+        normalized = normalized[: -len("_RELEASED")]
 
     canonical = _H_CANONICAL_NAMES.get(normalized)
     if canonical is None:
