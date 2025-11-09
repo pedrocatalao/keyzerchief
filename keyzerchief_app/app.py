@@ -96,7 +96,13 @@ def _canonicalize_shift_name(name: str) -> tuple[str, bool] | None:
     return canonical, is_release
 
 
-def _identify_shift_key(key: int) -> tuple[str, bool] | None:
+def _identify_shift_key(key: int | str) -> tuple[str, bool] | None:
+    if isinstance(key, str):
+        canonical = _canonicalize_shift_name(key)
+        if canonical is not None:
+            return canonical
+        return None
+
     try:
         key_name = curses.keyname(key)
     except curses.error:
@@ -132,6 +138,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
     """Entry point for the curses application."""
     state = AppState()
     init_curses()
+    stdscr.keypad(True)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     keystore_arg = argv[0] if argv else None
@@ -162,9 +169,23 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
         draw_footer(stdscr, state)
         draw_menu_bar(None, width)
 
-        key = stdscr.getch()
+        try:
+            raw_key = stdscr.get_wch()
+        except curses.error:
+            continue
 
-        if key == curses.KEY_MOUSE and state.mouse_enabled:
+        key_symbol: str | None = None
+        if isinstance(raw_key, str):
+            if len(raw_key) == 1:
+                key: int | str = ord(raw_key)
+            else:
+                key_symbol = raw_key
+                resolved = getattr(curses, raw_key, None)
+                key = resolved if isinstance(resolved, int) else raw_key
+        else:
+            key = raw_key
+
+        if isinstance(key, int) and key == curses.KEY_MOUSE and state.mouse_enabled:
             try:
                 _, mx, my, _, mouse_event = curses.getmouse()
 
@@ -220,9 +241,10 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 pass
             continue
 
-        shift_f_index = SHIFT_FKEY_MAP.get(key)
+        shift_identifier = key_symbol or key
+        shift_f_index = SHIFT_FKEY_MAP.get(key) if isinstance(key, int) else None
 
-        shift_key = _identify_shift_key(key)
+        shift_key = _identify_shift_key(shift_identifier)
         if shift_key is not None:
             identifier, is_release = shift_key
 
@@ -251,7 +273,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 draw_footer(stdscr, state)
             continue
 
-        if key == curses.KEY_UP:
+        if isinstance(key, int) and key == curses.KEY_UP:
             if active_panel == LEFT_PANEL:
                 if selected > 0:
                     selected -= 1
@@ -261,7 +283,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             elif active_panel == RIGHT_PANEL and detail_scroll > 0:
                 detail_scroll -= 1
 
-        elif key == curses.KEY_DOWN:
+        elif isinstance(key, int) and key == curses.KEY_DOWN:
             if active_panel == LEFT_PANEL:
                 if selected < len(entries) - 1:
                     selected += 1
@@ -289,7 +311,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             play_sfx("swipe")
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
-        elif curses.KEY_F1 <= key <= curses.KEY_F10:
+        elif isinstance(key, int) and curses.KEY_F1 <= key <= curses.KEY_F10:
             if state.shift_mode:
                 highlight_footer_key(stdscr, key - curses.KEY_F1, state)
                 if not state.shift_keys_down:
