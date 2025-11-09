@@ -49,5 +49,18 @@ FOOTER_OPTIONS = [
     "10Quit",
 ]
 
+SHIFT_FOOTER_OPTIONS = [
+    " 1ShrtCut1",
+    " 2ShrtCut2",
+    " 3ShrtCut3",
+    " 4ShrtCut4",
+    " 5ShrtCut5",
+    " 6ShrtCut6",
+    " 7ShrtCut7",
+    " 8ShrtCut8",
+    " 9ShrtCut9",
+    "10ShrtCut10",
+]
+
 # Application directories
 BASE_DIR = Path(__file__).resolve().parent.parent
