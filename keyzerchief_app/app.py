@@ -212,25 +212,83 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     highlight_footer_key(stdscr, key_index, footer_options)
 
                 if shift_active:
-                    if key_index == 5 and entries:
-                        alias = entries[selected].get("Alias name")
+                    if key_index == 1:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        alias = generate_key_pair(stdscr, state)
                         if alias:
-                            draw_ui(
-                                stdscr,
-                                state,
-                                entries,
-                                selected,
-                                scroll_offset,
-                                detail_scroll,
-                                active_panel,
-                                True,
-                            )
-                            renamed_alias = rename_entry_alias(stdscr, state, alias)
-                            if renamed_alias and renamed_alias != alias:
-                                entries = get_keystore_entries(state)
-                                selected = find_entry_index_by_alias(entries, renamed_alias)
-                                check_unsaved_changes(state)
-                    continue
+                            entries = get_keystore_entries(state)
+                            selected = find_entry_index_by_alias(entries, alias)
+                            check_unsaved_changes(state)
+                        continue
+
+                    if key_index == 2:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        choice = prompt_import_key_type(stdscr)
+                        if choice == "PKCS #12":
+                            alias = import_pkcs12_keypair(stdscr, state)
+                        elif choice == "PKCS #8":
+                            alias = import_pkcs8_keypair(stdscr, state)
+                        else:
+                            alias = None
+                        if alias:
+                            entries = get_keystore_entries(state)
+                            selected = find_entry_index_by_alias(entries, alias)
+                            check_unsaved_changes(state)
+                        continue
+
+                    if key_index == 3:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        alias = import_cert_file(stdscr, state)
+                        if alias:
+                            entries = get_keystore_entries(state)
+                            selected = find_entry_index_by_alias(entries, alias)
+                            check_unsaved_changes(state)
+                        continue
+
+                    if key_index == 4:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        alias = import_cert_from_url(stdscr, state)
+                        if alias:
+                            entries = get_keystore_entries(state)
+                            selected = find_entry_index_by_alias(entries, alias)
+                            check_unsaved_changes(state)
+                        continue
 
                 if key_index == 0:
                     draw_ui(
@@ -256,82 +314,27 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         active_panel,
                         True,
                     )
-                    alias = generate_key_pair(stdscr, state)
-                    if alias:
-                        entries = get_keystore_entries(state)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        check_unsaved_changes(state)
-
-                elif key_index == 2:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
-                    alias = import_cert_file(stdscr, state)
-                    if alias:
-                        entries = get_keystore_entries(state)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        check_unsaved_changes(state)
-
-                elif key_index == 3:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
-                    choice = prompt_import_key_type(stdscr)
-                    if choice == "PKCS #12":
-                        alias = import_pkcs12_keypair(stdscr, state)
-                    elif choice == "PKCS #8":
-                        alias = import_pkcs8_keypair(stdscr, state)
-                    else:
-                        alias = None
-                    if alias:
-                        entries = get_keystore_entries(state)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        check_unsaved_changes(state)
-
-                elif key_index == 4:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
-                    alias = import_cert_from_url(stdscr, state)
-                    if alias:
-                        entries = get_keystore_entries(state)
-                        selected = find_entry_index_by_alias(entries, alias)
-                        check_unsaved_changes(state)
-
-                elif key_index == 5:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
                     change_keystore_password(stdscr, state)
                     check_unsaved_changes(state)
+
+                elif key_index == 5 and entries:
+                    alias = entries[selected].get("Alias name")
+                    if alias:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        renamed_alias = rename_entry_alias(stdscr, state, alias)
+                        if renamed_alias and renamed_alias != alias:
+                            entries = get_keystore_entries(state)
+                            selected = find_entry_index_by_alias(entries, renamed_alias)
+                            check_unsaved_changes(state)
 
                 elif key_index == 6:
                     draw_ui(

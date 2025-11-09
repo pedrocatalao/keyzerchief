@@ -38,11 +38,11 @@ MENU_SPACING = 3
 MENU_ITEMS = ["Left", "File", "Options", "Right"]
 FOOTER_OPTIONS = [
     " 1Help",
-    " 2GenKeyPair",
-    " 3ImpCert",
-    " 4ImpKeyPair",
-    " 5ImpFromWeb",
-    " 6SetPwd",
+    " 2SetPwd",
+    " 3Export",
+    " 4Verify",
+    " 5Copy",
+    " 6Rename",
     " 7Save",
     " 8Delete",
     " 9PullDn",
@@ -50,16 +50,16 @@ FOOTER_OPTIONS = [
 ]
 
 SHIFT_FOOTER_OPTIONS = [
-    " 1ShrtCut1",
-    " 2ShrtCut2",
-    " 3ShrtCut3",
-    " 4ShrtCut4",
-    " 5ShrtCut5",
-    " 6Rename",
-    " 7ShrtCut7",
-    " 8ShrtCut8",
-    " 9ShrtCut9",
-    "10ShrtCut10",
+    " 1Help",
+    " 2GenKeyPair",
+    " 3ImpKeyPair",
+    " 4ImpCert",
+    " 5ImpFromWeb",
+    " 6      ",
+    " 7      ",
+    " 8      ",
+    " 9PullDn",
+    "10Quit",
 ]
 
 # Application directories
