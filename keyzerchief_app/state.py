@@ -31,6 +31,8 @@ class AppState:
     mouse_enabled: bool = True
     right_panel_highlight_term: Optional[str] = None
     filter_state: dict[str, str] = field(default_factory=default_filter_state)
+    shift_mode: bool = False
+    shift_latched: bool = False
 
     def mark_dirty(self) -> None:
         self.has_unsaved_changes = True

@@ -27,6 +27,30 @@ from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
+SHIFT_KEYS = tuple(
+    key
+    for key in (
+        getattr(curses, "KEY_SHIFT_L", None),
+        getattr(curses, "KEY_SHIFT_R", None),
+    )
+    if key is not None
+)
+
+
+def _build_shift_fkey_map() -> dict[int, int]:
+    mapping: dict[int, int] = {}
+    base_offset = 12
+    for index in range(10):
+        key_name = f"KEY_F{index + 1 + base_offset}"
+        key_code = getattr(curses, key_name, None)
+        if key_code is not None:
+            mapping[key_code] = index
+    return mapping
+
+
+SHIFT_FKEY_MAP = _build_shift_fkey_map()
+
+
 def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
     """Entry point for the curses application."""
     state = AppState()
@@ -119,6 +143,24 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 pass
             continue
 
+        shift_f_index = SHIFT_FKEY_MAP.get(key)
+
+        if key in SHIFT_KEYS:
+            state.shift_mode = True
+            state.shift_latched = True
+            draw_footer(stdscr, state)
+            continue
+
+        if shift_f_index is not None:
+            previous_shift_state = state.shift_mode
+            if not previous_shift_state:
+                state.shift_mode = True
+                draw_footer(stdscr, state)
+            highlight_footer_key(stdscr, shift_f_index, state)
+            state.shift_mode = False
+            state.shift_latched = False
+            continue
+
         if key == curses.KEY_UP:
             if active_panel == LEFT_PANEL:
                 if selected > 0:
@@ -158,7 +200,13 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
         elif curses.KEY_F1 <= key <= curses.KEY_F10:
-            highlight_footer_key(stdscr, key - curses.KEY_F1)
+            if state.shift_mode:
+                highlight_footer_key(stdscr, key - curses.KEY_F1, state)
+                state.shift_mode = False
+                state.shift_latched = False
+                continue
+
+            highlight_footer_key(stdscr, key - curses.KEY_F1, state)
 
             if key == curses.KEY_F1:
                 draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
@@ -237,6 +285,10 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             ret = save_changes(stdscr, state)
             if ret is None:
                 break
+
+        if state.shift_latched:
+            state.shift_mode = False
+            state.shift_latched = False
 
         if state.has_unsaved_changes and selected == len(entries) - 1:
             scroll_offset = max(0, len(entries) - panel_height)
