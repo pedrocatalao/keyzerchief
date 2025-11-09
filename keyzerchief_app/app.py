@@ -27,14 +27,50 @@ from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
-SHIFT_KEYS = tuple(
-    key
-    for key in (
-        getattr(curses, "KEY_SHIFT_L", None),
-        getattr(curses, "KEY_SHIFT_R", None),
-    )
-    if key is not None
+_SHIFT_KEY_ATTRS = (
+    "KEY_SHIFT_L",
+    "KEY_SHIFT_R",
+    "KEY_SHIFT",
+    "KEY_LSHIFT",
+    "KEY_RSHIFT",
 )
+
+
+def _build_shift_keys() -> tuple[int, ...]:
+    keys: list[int] = []
+    for attr in _SHIFT_KEY_ATTRS:
+        key_code = getattr(curses, attr, None)
+        if key_code is not None:
+            keys.append(key_code)
+    return tuple(keys)
+
+
+SHIFT_KEYS = _build_shift_keys()
+
+_SHIFT_KEY_NAMES = {
+    "KEY_SHIFT_L",
+    "KEY_SHIFT_R",
+    "KEY_SHIFT",
+    "KEY_LSHIFT",
+    "KEY_RSHIFT",
+    "SHIFT_L",
+    "SHIFT_R",
+    "Shift_L",
+    "Shift_R",
+}
+
+
+def _is_shift_key(key: int) -> bool:
+    if key in SHIFT_KEYS:
+        return True
+
+    try:
+        key_name = curses.keyname(key)
+    except curses.error:
+        return False
+
+    decoded = key_name.decode("ascii", "ignore")
+    return decoded in _SHIFT_KEY_NAMES
 
 
 def _build_shift_fkey_map() -> dict[int, int]:
@@ -145,7 +181,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
 
         shift_f_index = SHIFT_FKEY_MAP.get(key)
 
-        if key in SHIFT_KEYS:
+        if _is_shift_key(key):
             state.shift_mode = True
             state.shift_latched = True
             draw_footer(stdscr, state)

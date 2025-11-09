@@ -52,6 +52,7 @@ def draw_footer(stdscr: "curses.window", state: AppState) -> None:
         )
         stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
+    stdscr.refresh()
 
 
 def highlight_footer_key(stdscr: "curses.window", key_index: int, state: AppState) -> None:
