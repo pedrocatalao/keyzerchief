@@ -49,7 +49,7 @@ FOOTER_OPTIONS = [
     "10Quit",
 ]
 
-SHIFT_FOOTER_OPTIONS = [
+ALT_FOOTER_OPTIONS = [
     " 1ShrtCut1",
     " 2ShrtCut2",
     " 3ShrtCut3",

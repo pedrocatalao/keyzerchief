@@ -24,7 +24,7 @@ from ..constants import (
     COLOR_PAIR_WHITE,
     COLOR_PAIR_WHITE_DIM,
     FOOTER_OPTIONS,
-    SHIFT_FOOTER_OPTIONS,
+    ALT_FOOTER_OPTIONS,
     LEFT_PANEL,
     MENU_ITEMS,
     MENU_SPACING,
@@ -34,7 +34,7 @@ from ..state import AppState
 
 
 def _get_footer_options(state: AppState) -> list[str]:
-    return SHIFT_FOOTER_OPTIONS if state.shift_mode else FOOTER_OPTIONS
+    return ALT_FOOTER_OPTIONS if state.alt_mode else FOOTER_OPTIONS
 
 
 def draw_footer(stdscr: "curses.window", state: AppState) -> None:
