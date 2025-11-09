@@ -14,7 +14,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from keyzerchief_app.constants import COLOR_PAIR_DARKER, COLOR_PAIR_HEADER, COLOR_PAIR_MENU, LEFT_PANEL, MENU_ITEMS, MENU_SPACING, RIGHT_PANEL
+from keyzerchief_app.constants import (
+    COLOR_PAIR_DARKER,
+    COLOR_PAIR_HEADER,
+    COLOR_PAIR_MENU,
+    FOOTER_OPTIONS,
+    LEFT_PANEL,
+    MENU_ITEMS,
+    MENU_SPACING,
+    RIGHT_PANEL,
+)
 from keyzerchief_app.curses_setup import init_curses
 from keyzerchief_app.keystore import get_keystore_entries
 from keyzerchief_app.state import AppState
@@ -428,7 +437,7 @@ def _render_overview(fake: FakeCurses, demo_path: Path, output: Path) -> None:
     state, entries = _load_state(demo_path)
     selected = 1 if len(entries) > 1 else 0
     draw_ui(stdscr, state, entries, selected, 0, 0, LEFT_PANEL)
-    draw_footer(stdscr, state)
+    draw_footer(stdscr, state, FOOTER_OPTIONS)
     height, width = stdscr.getmaxyx()
     draw_menu_bar(None, width)
     _export_svg(fake, stdscr, output, "Keyzerchief overview screenshot")
@@ -442,7 +451,7 @@ def _render_menu(fake: FakeCurses, demo_path: Path, output: Path) -> None:
     state, entries = _load_state(demo_path)
     state.right_panel_highlight_term = "keyzerchief"
     draw_ui(stdscr, state, entries, 0, 0, 0, RIGHT_PANEL)
-    draw_footer(stdscr, state)
+    draw_footer(stdscr, state, FOOTER_OPTIONS)
     _draw_menu_overlay(stdscr, fake, active_menu=1, selected_index=0)
     _export_svg(fake, stdscr, output, "Keyzerchief command menu screenshot")
 
@@ -453,7 +462,7 @@ def _render_intro(fake: FakeCurses, demo_path: Path, output: Path) -> None:
     stdscr.erase()
     state, entries = _load_state(demo_path)
     draw_ui(stdscr, state, entries, 0, 0, 0, LEFT_PANEL, dim=True)
-    draw_footer(stdscr, state)
+    draw_footer(stdscr, state, FOOTER_OPTIONS)
     height, width = stdscr.getmaxyx()
     draw_menu_bar(None, width)
     intro_win = real_intro_window(stdscr)
