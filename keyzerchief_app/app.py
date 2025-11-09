@@ -27,188 +27,86 @@ from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
-_ALT_KEY_ATTRS = (
-    "KEY_ALT_L",
-    "KEY_ALT_R",
-    "KEY_ALT",
-    "KEY_LALT",
-    "KEY_RALT",
-    "KEY_OPTION_L",
-    "KEY_OPTION_R",
-    "KEY_OPTION",
-    "KEY_META_L",
-    "KEY_META_R",
-    "KEY_META",
-)
+_H_KEY_CODES = {ord("h"), ord("H")}
 
-
-def _build_alt_keys() -> tuple[int, ...]:
-    keys: list[int] = []
-    for attr in _ALT_KEY_ATTRS:
-        key_code = getattr(curses, attr, None)
-        if key_code is not None:
-            keys.append(key_code)
-    return tuple(keys)
-
-
-ALT_KEYS = _build_alt_keys()
-
-_ALT_CANONICAL_NAMES = {
-    "KEY_ALT_L": "ALT_LEFT",
-    "KEY_ALT-L": "ALT_LEFT",
-    "KEY_LALT": "ALT_LEFT",
-    "ALT_L": "ALT_LEFT",
-    "ALT_LEFT": "ALT_LEFT",
-    "ALT-L": "ALT_LEFT",
-    "OPTION_L": "ALT_LEFT",
-    "OPTION_LEFT": "ALT_LEFT",
-    "OPTION-L": "ALT_LEFT",
-    "KEY_OPTION_L": "ALT_LEFT",
-    "META_L": "ALT_LEFT",
-    "META_LEFT": "ALT_LEFT",
-    "META-L": "ALT_LEFT",
-    "KEY_META_L": "ALT_LEFT",
-    "KEY_ALT_R": "ALT_RIGHT",
-    "KEY_ALT-R": "ALT_RIGHT",
-    "KEY_RALT": "ALT_RIGHT",
-    "ALT_R": "ALT_RIGHT",
-    "ALT_RIGHT": "ALT_RIGHT",
-    "ALT-R": "ALT_RIGHT",
-    "OPTION_R": "ALT_RIGHT",
-    "OPTION_RIGHT": "ALT_RIGHT",
-    "OPTION-R": "ALT_RIGHT",
-    "KEY_OPTION_R": "ALT_RIGHT",
-    "META_R": "ALT_RIGHT",
-    "META_RIGHT": "ALT_RIGHT",
-    "META-R": "ALT_RIGHT",
-    "KEY_META_R": "ALT_RIGHT",
-    "KEY_ALT": "ALT_GENERIC",
-    "ALT": "ALT_GENERIC",
-    "KEY_OPTION": "ALT_GENERIC",
-    "OPTION": "ALT_GENERIC",
-    "KEY_META": "ALT_GENERIC",
-    "META": "ALT_GENERIC",
+_H_CANONICAL_NAMES = {
+    "H": "H",
+    "KEY_H": "H",
+    "KEY_DOWN_H": "H",
+    "KEY_UP_H": "H",
 }
 
 
-def _canonicalize_alt_name(name: str) -> tuple[str, bool] | None:
+def _canonicalize_h_name(name: str) -> tuple[str, bool] | None:
     normalized = name.upper().replace(" ", "_")
     is_release = False
 
     if normalized.startswith("KEY_RELEASE_"):
         is_release = True
         normalized = normalized[len("KEY_RELEASE_"):]
+    elif normalized.startswith("KEY_UP_"):
+        is_release = True
+        normalized = normalized[len("KEY_UP_"):]
     elif normalized.endswith("_RELEASE"):
         is_release = True
         normalized = normalized[: -len("_RELEASE")]
 
-    canonical = _ALT_CANONICAL_NAMES.get(normalized)
+    canonical = _H_CANONICAL_NAMES.get(normalized)
     if canonical is None:
         return None
 
     return canonical, is_release
 
 
-def _identify_alt_key(key: int | str) -> tuple[str, bool] | None:
-    if isinstance(key, str):
-        canonical = _canonicalize_alt_name(key)
-        if canonical is not None:
-            return canonical
-        return None
-
-    try:
-        key_name = curses.keyname(key)
-    except curses.error:
-        key_name = None
-
-    if key_name is not None:
-        decoded = key_name.decode("ascii", "ignore")
-        canonical = _canonicalize_alt_name(decoded)
-        if canonical is not None:
-            return canonical
-
-    if key in ALT_KEYS:
-        return (f"CODE_{key}", False)
-
-    return None
-
-
-def _extract_function_key_details(symbol: str) -> tuple[int, str] | None:
-    normalized = symbol.upper().replace(" ", "_")
-    patterns: tuple[tuple[str, str], ...] = (
-        ("KEY_ALT_F", "alt"),
-        ("KEY_OPTION_F", "alt"),
-        ("KEY_META_F", "alt"),
-        ("KEY_AF", "alt"),
-        ("KEY_SHIFT_F", "shift"),
-        ("KEY_SF", "shift"),
-        ("KEY_F(", "raw_paren"),
-        ("KEY_F", "raw"),
-    )
-
-    for prefix, kind in patterns:
-        if normalized.startswith(prefix):
-            fragment = normalized[len(prefix) :]
-            if fragment.startswith("(") and fragment.endswith(")"):
-                fragment = fragment[1:-1]
-            if kind == "raw_paren":
-                fragment = fragment[:-1] if fragment.endswith(")") else fragment
-                kind = "raw"
-            if fragment.isdigit():
-                return int(fragment), kind
-
-    return None
-
-
-def _resolve_function_key_index(key: int | str) -> tuple[int, int] | None:
-    number: int | None = None
-    kind: str | None = None
+def _identify_h_modifier(key: int | str) -> bool | None:
     if isinstance(key, int):
-        if curses.KEY_F1 <= key <= curses.KEY_F12:
-            number = key - curses.KEY_F0
-            kind = "base"
-        else:
-            try:
-                key_name = curses.keyname(key)
-            except curses.error:
-                key_name = None
-            if key_name:
-                details = _extract_function_key_details(key_name.decode("ascii", "ignore"))
-                if details:
-                    number, kind = details
-    else:
-        details = _extract_function_key_details(key)
-        if details:
-            number, kind = details
-
-    if number is None or number <= 0 or kind is None:
+        if key in _H_KEY_CODES:
+            return True
+        try:
+            key_name = curses.keyname(key)
+        except curses.error:
+            key_name = None
+        if key_name is not None:
+            decoded = key_name.decode("ascii", "ignore")
+            canonical = _canonicalize_h_name(decoded)
+            if canonical is not None:
+                _identifier, is_release = canonical
+                return not is_release
         return None
 
-    footer_len = len(FOOTER_OPTIONS)
+    canonical = _canonicalize_h_name(key)
+    if canonical is None:
+        return None
 
-    if kind == "alt":
-        index = number - 1
-        offset = 24
-    elif kind == "shift":
-        index = number - 1
-        offset = 12
-    else:
-        offset = None
-        for candidate in (0, 12, 24, 36):
-            start = candidate + 1
-            end = candidate + footer_len
-            if start <= number <= end:
-                offset = candidate
-                index = number - start
-                break
-        if offset is None:
+    _identifier, is_release = canonical
+    return not is_release
+
+
+def _resolve_function_key_index(key: int | str) -> int | None:
+    if isinstance(key, int):
+        if curses.KEY_F1 <= key <= curses.KEY_F10:
+            return key - curses.KEY_F1
+        try:
+            key_name = curses.keyname(key)
+        except curses.error:
+            key_name = None
+        if key_name is None:
             return None
+        key = key_name.decode("ascii", "ignore")
 
-    if not 0 <= index < footer_len:
-        return None
-
-    return index, offset
-
+    if isinstance(key, str):
+        normalized = key.upper().replace(" ", "")
+        if normalized.startswith("KEY_RELEASE_"):
+            return None
+        fragment: str | None = None
+        if normalized.startswith("KEY_F(") and normalized.endswith(")"):
+            fragment = normalized[6:-1]
+        elif normalized.startswith("KEY_F"):
+            fragment = normalized[5:]
+        if fragment and fragment.isdigit():
+            number = int(fragment)
+            if 1 <= number <= len(FOOTER_OPTIONS):
+                return number - 1
     return None
 
 
@@ -320,36 +218,25 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             continue
 
         modifier_identifier = key_symbol or key
-        alt_key = _identify_alt_key(modifier_identifier)
-        if alt_key is not None:
-            identifier, is_release = alt_key
-
-            if is_release:
-                state.alt_keys_down.discard(identifier)
+        h_event = _identify_h_modifier(modifier_identifier)
+        if h_event is not None:
+            if h_event:
+                if not state.h_modifier_active:
+                    state.h_modifier_active = True
+                    if not state.alternate_mode:
+                        state.alternate_mode = True
+                        draw_footer(stdscr, state)
             else:
-                state.alt_keys_down.add(identifier)
-
-            alt_active = bool(state.alt_keys_down)
-            if state.alt_mode != alt_active:
-                state.alt_mode = alt_active
-                draw_footer(stdscr, state)
+                if state.h_modifier_active:
+                    state.h_modifier_active = False
+                if state.alternate_mode:
+                    state.alternate_mode = False
+                    draw_footer(stdscr, state)
             continue
 
-        function_key = _resolve_function_key_index(modifier_identifier)
-        if function_key is not None and function_key[1] >= 24:
-            key_index, _offset = function_key
-            temporary_alt = False
-
-            if not state.alt_mode:
-                state.alt_mode = True
-                draw_footer(stdscr, state)
-                temporary_alt = True
-
-            highlight_footer_key(stdscr, key_index, state)
-
-            if temporary_alt and not state.alt_keys_down:
-                state.alt_mode = False
-                draw_footer(stdscr, state)
+        function_index = _resolve_function_key_index(modifier_identifier)
+        if function_index is not None and state.alternate_mode:
+            highlight_footer_key(stdscr, function_index, state)
             continue
 
         if isinstance(key, int) and key == curses.KEY_UP:
@@ -391,11 +278,8 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
         elif isinstance(key, int) and curses.KEY_F1 <= key <= curses.KEY_F10:
-            if state.alt_mode:
+            if state.alternate_mode:
                 highlight_footer_key(stdscr, key - curses.KEY_F1, state)
-                if not state.alt_keys_down:
-                    state.alt_mode = False
-                    draw_footer(stdscr, state)
                 continue
 
             highlight_footer_key(stdscr, key - curses.KEY_F1, state)
