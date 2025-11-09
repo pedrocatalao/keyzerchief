@@ -462,6 +462,63 @@ def import_cert_from_url(stdscr: "curses.window", state: AppState) -> Optional[s
             os.remove(cert_path)
 
 
+def rename_entry_alias(
+    stdscr: "curses.window", state: AppState, current_alias: str
+) -> Optional[str]:
+    """Prompt for a new alias name and rename the selected entry."""
+
+    if not state.keystore_path or not current_alias:
+        return None
+
+    form_data, win = popup_form(
+        stdscr,
+        title="Rename Entry",
+        labels=["New alias:"],
+        default_values={0: current_alias},
+    )
+
+    if not form_data:
+        return None
+
+    new_alias = form_data.get("new_alias", "").strip()
+    if not new_alias or new_alias == current_alias:
+        return None
+
+    clear_window(win)
+    win.addstr(2, 2, "Renaming entry...", curses.A_BOLD)
+    win.refresh()
+
+    cmd = [
+        "keytool",
+        "-changealias",
+        "-alias",
+        current_alias,
+        "-destalias",
+        new_alias,
+        "-keystore",
+        str(state.keystore_path),
+        "-storepass",
+        state.keystore_password,
+    ]
+
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    except FileNotFoundError:
+        _show_error(win, "The 'keytool' executable could not be found.")
+        return None
+
+    if result.returncode == 0:
+        win.addstr(3, 2, f"Alias renamed to: {new_alias}", curses.A_BOLD)
+        win.addstr(win.getmaxyx()[0] - 3, 2, "Press any key to continue.")
+        win.refresh()
+        win.getch()
+        return new_alias
+
+    message = result.stderr.strip() or "Failed to rename alias."
+    _show_error(win, message)
+    return None
+
+
 def delete_entry(alias: str, stdscr: "curses.window", state: AppState) -> bool:
     height, width = stdscr.getmaxyx()
     confirm_height, confirm_width = 8, 60

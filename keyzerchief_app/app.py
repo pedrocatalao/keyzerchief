@@ -27,11 +27,25 @@ from .keystore_actions import (
     import_pkcs12_keypair,
     import_pkcs8_keypair,
     open_keystore,
+    rename_entry_alias,
 )
 from .input_listener import start_modifier_monitor, stop_modifier_monitor
 from .menu import menu_modal
 from .state import AppState
 from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
+
+
+def _resolve_function_key_index(key_code: int) -> tuple[int, bool] | None:
+    """Return the zero-based function key index and whether shift was implied."""
+
+    if curses.KEY_F1 <= key_code <= curses.KEY_F10:
+        return key_code - curses.KEY_F1, False
+
+    shift_start = getattr(curses, "KEY_F13", None)
+    if shift_start is not None and shift_start <= key_code <= shift_start + 9:
+        return key_code - shift_start, True
+
+    return None
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
@@ -189,15 +203,36 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 play_sfx("swipe")
                 active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
-            elif curses.KEY_F1 <= key <= curses.KEY_F10:
-                shift_active = modifier_monitor.is_shift_pressed()
+            elif (fkey_info := _resolve_function_key_index(key)) is not None:
+                key_index, shift_from_code = fkey_info
+                shift_active = shift_from_code or modifier_monitor.is_shift_pressed()
                 footer_options = SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
-                highlight_footer_key(stdscr, key - curses.KEY_F1, footer_options)
+
+                if 0 <= key_index < len(footer_options):
+                    highlight_footer_key(stdscr, key_index, footer_options)
 
                 if shift_active:
+                    if key_index == 5 and entries:
+                        alias = entries[selected].get("Alias name")
+                        if alias:
+                            draw_ui(
+                                stdscr,
+                                state,
+                                entries,
+                                selected,
+                                scroll_offset,
+                                detail_scroll,
+                                active_panel,
+                                True,
+                            )
+                            renamed_alias = rename_entry_alias(stdscr, state, alias)
+                            if renamed_alias and renamed_alias != alias:
+                                entries = get_keystore_entries(state)
+                                selected = find_entry_index_by_alias(entries, renamed_alias)
+                                check_unsaved_changes(state)
                     continue
 
-                if key == curses.KEY_F1:
+                if key_index == 0:
                     draw_ui(
                         stdscr,
                         state,
@@ -210,7 +245,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     )
                     show_help_popup(stdscr)
 
-                elif key == curses.KEY_F2:
+                elif key_index == 1:
                     draw_ui(
                         stdscr,
                         state,
@@ -227,7 +262,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         selected = find_entry_index_by_alias(entries, alias)
                         check_unsaved_changes(state)
 
-                elif key == curses.KEY_F3:
+                elif key_index == 2:
                     draw_ui(
                         stdscr,
                         state,
@@ -244,7 +279,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         selected = find_entry_index_by_alias(entries, alias)
                         check_unsaved_changes(state)
 
-                elif key == curses.KEY_F4:
+                elif key_index == 3:
                     draw_ui(
                         stdscr,
                         state,
@@ -267,7 +302,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         selected = find_entry_index_by_alias(entries, alias)
                         check_unsaved_changes(state)
 
-                elif key == curses.KEY_F5:
+                elif key_index == 4:
                     draw_ui(
                         stdscr,
                         state,
@@ -284,7 +319,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         selected = find_entry_index_by_alias(entries, alias)
                         check_unsaved_changes(state)
 
-                elif key == curses.KEY_F6:
+                elif key_index == 5:
                     draw_ui(
                         stdscr,
                         state,
@@ -298,7 +333,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     change_keystore_password(stdscr, state)
                     check_unsaved_changes(state)
 
-                elif key == curses.KEY_F7:
+                elif key_index == 6:
                     draw_ui(
                         stdscr,
                         state,
@@ -311,7 +346,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     )
                     save_changes(stdscr, state)
 
-                elif key == curses.KEY_F8:
+                elif key_index == 7:
                     draw_ui(
                         stdscr,
                         state,
@@ -326,7 +361,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         entries = get_keystore_entries(state)
                         selected = min(selected, len(entries) - 1)
 
-                elif key == curses.KEY_F9:
+                elif key_index == 8:
                     draw_ui(
                         stdscr,
                         state,
@@ -353,7 +388,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                         ),
                     )
 
-                elif key == curses.KEY_F10:
+                elif key_index == 9:
                     result = save_changes(stdscr, state)
                     if result is None:
                         break

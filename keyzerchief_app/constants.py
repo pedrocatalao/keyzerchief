@@ -55,7 +55,7 @@ SHIFT_FOOTER_OPTIONS = [
     " 3ShrtCut3",
     " 4ShrtCut4",
     " 5ShrtCut5",
-    " 6ShrtCut6",
+    " 6Rename",
     " 7ShrtCut7",
     " 8ShrtCut8",
     " 9ShrtCut9",
