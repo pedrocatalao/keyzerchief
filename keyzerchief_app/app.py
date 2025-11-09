@@ -241,7 +241,13 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                             active_panel,
                             True,
                         )
-                        alias = import_cert_file(stdscr, state)
+                        choice = prompt_import_key_type(stdscr)
+                        if choice == "PKCS #12":
+                            alias = import_pkcs12_keypair(stdscr, state)
+                        elif choice == "PKCS #8":
+                            alias = import_pkcs8_keypair(stdscr, state)
+                        else:
+                            alias = None
                         if alias:
                             entries = get_keystore_entries(state)
                             selected = find_entry_index_by_alias(entries, alias)
@@ -259,13 +265,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                             active_panel,
                             True,
                         )
-                        choice = prompt_import_key_type(stdscr)
-                        if choice == "PKCS #12":
-                            alias = import_pkcs12_keypair(stdscr, state)
-                        elif choice == "PKCS #8":
-                            alias = import_pkcs8_keypair(stdscr, state)
-                        else:
-                            alias = None
+                        alias = import_cert_file(stdscr, state)
                         if alias:
                             entries = get_keystore_entries(state)
                             selected = find_entry_index_by_alias(entries, alias)
@@ -288,26 +288,6 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                             entries = get_keystore_entries(state)
                             selected = find_entry_index_by_alias(entries, alias)
                             check_unsaved_changes(state)
-                        continue
-
-                    if key_index == 5 and entries:
-                        alias = entries[selected].get("Alias name")
-                        if alias:
-                            draw_ui(
-                                stdscr,
-                                state,
-                                entries,
-                                selected,
-                                scroll_offset,
-                                detail_scroll,
-                                active_panel,
-                                True,
-                            )
-                            renamed_alias = rename_entry_alias(stdscr, state, alias)
-                            if renamed_alias and renamed_alias != alias:
-                                entries = get_keystore_entries(state)
-                                selected = find_entry_index_by_alias(entries, renamed_alias)
-                                check_unsaved_changes(state)
                         continue
 
                 if key_index == 0:
