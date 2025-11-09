@@ -71,9 +71,12 @@ def draw_menu_bar(active_menu: int | None, width: int) -> None:
     x = 1
     for i, item in enumerate(MENU_ITEMS):
         if i == active_menu:
-            bar_win.attron(curses.A_REVERSE)
+            attr = curses.A_REVERSE | curses.A_BOLD
+        else:
+            attr = curses.color_pair(COLOR_PAIR_MENU)
+        bar_win.attron(attr)
         bar_win.addstr(0, x, f" {item} ")
-        bar_win.attroff(curses.A_REVERSE)
+        bar_win.attroff(attr)
         x += len(item) + MENU_SPACING
     bar_win.refresh()
 
