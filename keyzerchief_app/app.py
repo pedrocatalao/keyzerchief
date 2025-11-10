@@ -46,6 +46,32 @@ def _resolve_function_key_index(key_code: int) -> tuple[int, bool] | None:
         return key_code - shift_start, True
 
     return None
+
+
+def _capture_escape_sequence(stdscr: "curses.window") -> tuple[str | None, list[int]]:
+    """Capture any pending escape sequence following an initial ESC key press."""
+
+    captured: list[int] = []
+    stdscr.nodelay(True)
+    try:
+        while True:
+            ch = stdscr.getch()
+            if ch == -1:
+                break
+            captured.append(ch)
+    finally:
+        stdscr.nodelay(False)
+        stdscr.timeout(100)
+
+    if not captured:
+        return None, captured
+
+    try:
+        sequence = bytes([27, *captured]).decode("ascii", errors="ignore")
+    except ValueError:
+        sequence = None
+
+    return sequence, captured
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
@@ -92,6 +118,16 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
 
             if key == -1:
                 continue
+
+            consumed_codes: list[int] = []
+            fkey_info: tuple[int, bool] | None = _resolve_function_key_index(key)
+            if key == 27 and fkey_info is None:
+                seq, consumed_codes = _capture_escape_sequence(stdscr)
+                if seq in ("\x1b[1;2R", "\x1b[13;2~"):
+                    fkey_info = (2, True)
+                else:
+                    for code in reversed(consumed_codes):
+                        curses.ungetch(code)
 
             if key == curses.KEY_MOUSE and state.mouse_enabled:
                 try:
@@ -203,7 +239,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 play_sfx("swipe")
                 active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
 
-            elif (fkey_info := _resolve_function_key_index(key)) is not None:
+            elif fkey_info is not None:
                 key_index, shift_from_code = fkey_info
                 shift_active = shift_from_code or modifier_monitor.is_shift_pressed()
                 footer_options = SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
