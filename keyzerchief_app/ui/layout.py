@@ -147,6 +147,11 @@ def draw_ui(
     for i in range(scroll_offset, min(len(entries), scroll_offset + visible_height)):
         y_pos = 2 + i - scroll_offset
         alias = entries[i].get("Alias name", "<unknown>")
+        icon = entries[i].get("__icon__", "")
+        if icon:
+            display_text = f"{icon} {alias}".strip()
+        else:
+            display_text = alias
         is_expired = entries[i].get("__expired__", False)
         if active_panel == LEFT_PANEL:
             if i == selected:
@@ -167,7 +172,7 @@ def draw_ui(
             attr |= curses.A_DIM
 
         stdscr.addstr(y_pos, 2, " " * (panel_width - 4))
-        stdscr.addstr(y_pos, 2, alias[: panel_width - 4], attr)
+        stdscr.addstr(y_pos, 2, display_text[: panel_width - 4], attr)
 
     for y in range(2 + len(entries) - scroll_offset, height - 2):
         stdscr.addstr(y, 2, " " * (panel_width - 4))
