@@ -144,11 +144,11 @@ def get_keystore_entries(state: AppState) -> list[dict]:
         entry["__is_cert__"] = "cert" in entry_type_lower or "trustedcert" in entry_type_lower
 
         if "trustedcertentry" in entry_type_lower:
-            entry["__icon__"] = "🎖"
+            entry["__icon__"] = "⬔"
         elif "privatekeyentry" in entry_type_lower:
-            entry["__icon__"] = "🔑"
+            entry["__icon__"] = "⬚"
         else:
-            entry["__icon__"] = ""
+            entry["__icon__"] = "☠"
 
         detail_lines: list[tuple[str, str]] = []
         priority = ["Alias name", "Entry type", "Creation date", "Valid from"]
