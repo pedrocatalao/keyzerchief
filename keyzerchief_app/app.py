@@ -236,8 +236,12 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     detail_scroll = max(0, len(entries[selected].get("__rendered__", [])) - 1)
 
             elif key in (ord("\t"), 9):
-                play_sfx("swipe")
-                active_panel = RIGHT_PANEL if active_panel == LEFT_PANEL else LEFT_PANEL
+                if active_panel == LEFT_PANEL:
+                    active_panel = RIGHT_PANEL
+                    play_sfx("swipe-right")
+                else:
+                    active_panel = LEFT_PANEL
+                    play_sfx("swipe-left")
 
             elif fkey_info is not None:
                 key_index, shift_from_code = fkey_info
