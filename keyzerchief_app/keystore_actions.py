@@ -412,7 +412,6 @@ def import_cert_from_url(stdscr: "curses.window", state: AppState) -> Optional[s
     host = parts[0]
     port = parts[1] if len(parts) > 1 else "443"
 
-    cert_path = f"/tmp/cert_from_{url.replace(':', '_').replace('/', '_')}.crt"
     cmd = [
         "openssl",
         "s_client",
@@ -437,10 +436,11 @@ def import_cert_from_url(stdscr: "curses.window", state: AppState) -> Optional[s
     if "-----BEGIN CERTIFICATE-----" not in cert:
         raise RuntimeError("Could not extract certificate")
 
-    try:
-        with open(cert_path, "w", encoding="utf-8") as file:
-            file.write(cert)
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".crt", delete=False, encoding="utf-8") as temp_cert:
+        temp_cert.write(cert)
+        cert_path = temp_cert.name
 
+    try:
         alias = host
         import_cmd = [
             "keytool",

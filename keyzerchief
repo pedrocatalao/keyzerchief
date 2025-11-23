@@ -1,8 +1,56 @@
 #!/usr/bin/env python3
-"""Entry point script for the Keyzerchief TUI."""
+"""Entry point script for the Keyzerchief TUI with auto-venv setup."""
 
-from keyzerchief_app.__main__ import main
+import os
+import sys
+import subprocess
+from pathlib import Path
 
+def main():
+    script_dir = Path(__file__).parent.resolve()
+    venv_dir = script_dir / ".venv"
+    venv_python = venv_dir / "bin" / "python"
+
+    # Check if we are running from the local virtual environment
+    # We resolve paths to handle symlinks/absolute paths correctly
+    try:
+        is_in_local_venv = Path(sys.prefix).resolve() == venv_dir.resolve()
+    except OSError:
+        # If .venv doesn't exist yet, it can't be the current prefix
+        is_in_local_venv = False
+
+    if not is_in_local_venv:
+        # Create venv if it doesn't exist
+        if not venv_dir.exists():
+            print(f"Creating virtual environment in {venv_dir}...")
+            subprocess.check_call([sys.executable, "-m", "venv", str(venv_dir)])
+            
+            # Install dependencies
+            requirements_file = script_dir / "requirements.txt"
+            if requirements_file.exists():
+                print(f"Installing dependencies from {requirements_file}...")
+                subprocess.check_call([str(venv_python), "-m", "pip", "install", "-r", str(requirements_file)])
+            else:
+                print("No requirements.txt found, skipping dependency installation.")
+
+        # Re-execute the script with the venv python
+        if venv_python.exists():
+            # Pass the arguments correctly
+            os.execv(str(venv_python), [str(venv_python)] + sys.argv)
+        else:
+            print(f"Error: Virtual environment python not found at {venv_python}")
+            sys.exit(1)
+
+    # If we are here, we are in the venv (or user manually ran with venv python)
+    try:
+        from keyzerchief_app.__main__ import main as app_main
+        app_main()
+    except ImportError as e:
+        # Fallback: if we are in venv but packages are missing (e.g. venv existed but was empty)
+        # We could try to install again, or just warn.
+        print(f"Error starting app: {e}")
+        print("If dependencies are missing, try deleting the .venv directory and running again.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
