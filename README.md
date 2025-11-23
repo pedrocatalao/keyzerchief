@@ -1,6 +1,7 @@
 # 🔐 Keyzerchief
 
 [![Tests](https://github.com/pedrocatalao/keyzerchief/actions/workflows/tests.yml/badge.svg)](https://github.com/pedrocatalao/keyzerchief/actions/workflows/tests.yml)
+[![Coverage](https://raw.githubusercontent.com/pedrocatalao/keyzerchief/main/coverage.svg)](https://github.com/pedrocatalao/keyzerchief)
 
 Keyzerchief is a terminal user interface (TUI) for exploring and managing Java keystores with a dash of style. It wraps the familiar `keytool` utility in a colorful curses experience so you can inspect entries, import fresh material, or tidy up an aging keystore without ever leaving your keyboard.
 
