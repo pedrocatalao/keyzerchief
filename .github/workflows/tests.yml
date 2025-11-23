@@ -25,7 +25,15 @@ jobs:
         
     - name: Run tests with coverage
       run: |
-        pip install coverage
+        pip install coverage coverage-badge
         coverage run -m unittest discover tests
         coverage report
         coverage html
+        coverage-badge -o coverage.svg
+
+    - name: Commit coverage badge
+      if: github.ref == 'refs/heads/main'
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Update coverage badge
+        file_pattern: coverage.svg
