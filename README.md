@@ -25,6 +25,7 @@ Keyzerchief is a terminal user interface (TUI) for exploring and managing Java k
 - 🖱️ **Optional mouse support** so you can scroll, click menus, or select text when needed.
 - 🛡️ **Certificate insights** that highlight expired entries and surface key metadata immediately.
 - 📥 **Import helpers** for certificates and key pairs (PKCS#8, PKCS#12, PVK, OpenSSL) from local files or URLs.
+- 📤 **Export capabilities** to save certificates, public keys, and key pairs in various formats (X.509, PKCS#7, PKCS#12, PEM).
 - 🔑 **Password management** including opening password-protected keystores and changing the store password.
 - 🧹 **Housekeeping tools** such as deleting entries, saving modifications, and browsing with a built-in file picker.
 - 🔔 **Ambient audio cues** (macOS `afplay`) to celebrate key actions—optional but delightful.
@@ -86,8 +87,9 @@ python -m keyzerchief_app  # Module invocation
 | Filter aliases | `/` and start typing
 | Search details pane | `Ctrl+f`
 | Toggle mouse support | `Ctrl+m`
-| Open command menu | `F10` or mouse click on menu bar
-| Quit | `Ctrl+c` or menu option
+| Open command menu | `F9` or mouse click on menu bar
+| Export entry | `F3`
+| Quit | `F10` or menu option
 
 Contextual menus expose imports, password changes, deletion, saving, and more. Expired certificates glow red so you can spot them at a glance.
 
