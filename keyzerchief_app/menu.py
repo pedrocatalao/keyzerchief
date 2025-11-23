@@ -19,6 +19,58 @@ from .keystore_actions import open_keystore
 from .keystore import save_changes
 
 
+def handle_filter_popup(stdscr: "curses.window", state: AppState) -> None:
+    form_data, _ = popup_form(
+        stdscr,
+        title="Filter entries",
+        labels=[
+            "Name:",
+            "Partial name:",
+            "Valid:",
+            "Expired:",
+            "Keys:",
+            "Certificates:",
+        ],
+        choice_fields=[1, 2, 3, 4, 5],
+        choice_labels={
+            1: ("Yes", "No"),
+            2: ("Yes", "No"),
+            3: ("Yes", "No"),
+            4: ("Yes", "No"),
+            5: ("Yes", "No"),
+        },
+    )
+    if form_data:
+        state.filter_state.update(form_data)
+        state.reload_entries = True
+
+
+def handle_toggle_mouse(state: AppState) -> None:
+    state.mouse_enabled = not state.mouse_enabled
+    if state.mouse_enabled:
+        curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+    else:
+        curses.mousemask(0)
+
+
+def handle_search_content(stdscr: "curses.window", state: AppState) -> None:
+    form_data, _ = popup_form(
+        stdscr,
+        title="Search content",
+        labels=["Search term:"],
+        buttons=[" Search ", " Cancel "],
+        placeholder_values={0: "Enter a word or phrase to highlight"},
+    )
+
+    if not form_data:
+        return
+
+    term = form_data.get("search_term")
+    if not term:
+        return
+
+    state.right_panel_highlight_term = term.lower()
+
 def menu_modal(
     stdscr: "curses.window",
     state: AppState,
@@ -35,56 +87,6 @@ def menu_modal(
 
     selected_index: Optional[int] = None
     _, width = stdscr.getmaxyx()
-
-    def handle_filter_popup() -> None:
-        form_data, _ = popup_form(
-            stdscr,
-            title="Filter entries",
-            labels=[
-                "Name:",
-                "Partial name:",
-                "Valid:",
-                "Expired:",
-                "Keys:",
-                "Certificates:",
-            ],
-            choice_fields=[1, 2, 3, 4, 5],
-            choice_labels={
-                1: ("Yes", "No"),
-                2: ("Yes", "No"),
-                3: ("Yes", "No"),
-                4: ("Yes", "No"),
-                5: ("Yes", "No"),
-            },
-        )
-        if form_data:
-            state.filter_state.update(form_data)
-            state.reload_entries = True
-
-    def handle_toggle_mouse() -> None:
-        state.mouse_enabled = not state.mouse_enabled
-        if state.mouse_enabled:
-            curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
-        else:
-            curses.mousemask(0)
-
-    def handle_search_content() -> None:
-        form_data, _ = popup_form(
-            stdscr,
-            title="Search content",
-            labels=["Search term:"],
-            buttons=[" Search ", " Cancel "],
-            placeholder_values={0: "Enter a word or phrase to highlight"},
-        )
-
-        if not form_data:
-            return
-
-        term = form_data.get("search_term")
-        if not term:
-            return
-
-        state.right_panel_highlight_term = term.lower()
 
     def draw_submenu() -> "curses.window":
         items = submenus[MENU_ITEMS[active_menu]]
@@ -160,7 +162,7 @@ def menu_modal(
                     if redraw_main_ui:
                         redraw_main_ui()
                     if selected_label == "Filter":
-                        handle_filter_popup()
+                        handle_filter_popup(stdscr, state)
                     elif selected_label == "Open keystore":
                         open_keystore(stdscr, state, None)
                     elif selected_label == "Quit":
@@ -168,9 +170,9 @@ def menu_modal(
                         if result != "esc":
                             raise SystemExit(0)
                     elif selected_label == "Enable/Disable mouse":
-                        handle_toggle_mouse()
+                        handle_toggle_mouse(state)
                     elif selected_label == "Search content":
-                        handle_search_content()
+                        handle_search_content(stdscr, state)
                     break
 
         elif key == curses.KEY_LEFT:
@@ -219,7 +221,7 @@ def menu_modal(
                 draw_menu_bar(None, width)
                 if redraw_main_ui:
                     redraw_main_ui()
-                handle_filter_popup()
+                handle_filter_popup(stdscr, state)
             elif selected_label == "Open keystore":
                 submenu_win.clear()
                 draw_menu_bar(None, width)
@@ -239,13 +241,13 @@ def menu_modal(
                 draw_menu_bar(None, width)
                 if redraw_main_ui:
                     redraw_main_ui()
-                handle_toggle_mouse()
+                handle_toggle_mouse(state)
             elif selected_label == "Search content":
                 submenu_win.clear()
                 draw_menu_bar(None, width)
                 if redraw_main_ui:
                     redraw_main_ui()
-                handle_search_content()
+                handle_search_content(stdscr, state)
             return None, None
 
         elif key in [curses.KEY_F9, 27]:
