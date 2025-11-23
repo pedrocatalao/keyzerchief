@@ -84,6 +84,17 @@ def draw_menu_bar(active_menu: int | None, width: int) -> None:
     bar_win.refresh()
 
 
+def draw_clock(stdscr: "curses.window", width: int) -> None:
+    """Draw a digital clock in the top right corner."""
+    import time
+    now = time.localtime()
+    separator = ":" if now.tm_sec % 2 == 0 else " "
+    time_str = f"{now.tm_hour:02d}{separator}{now.tm_min:02d}"
+    x = width - len(time_str) - 1
+    stdscr.addstr(0, x, time_str, curses.color_pair(COLOR_PAIR_HEADER) | curses.A_REVERSE)
+    stdscr.refresh()
+
+
 def draw_ui(
     stdscr: "curses.window",
     state: AppState,

@@ -44,20 +44,3 @@ jobs:
         export TOTAL=$(python -c "import json;print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
         echo "total=$TOTAL" >> $GITHUB_ENV
         echo "### Total Coverage: ${TOTAL}%" >> $GITHUB_STEP_SUMMARY
-
-    - name: Update README badge
-      if: github.ref == 'refs/heads/main'
-      run: |
-        # Determine color
-        COLOR=$(python -c "t=float('$total'); print('green' if t > 80 else 'yellow' if t > 50 else 'red')")
-
-        # Update README (handle both old SVG and potential existing shields.io badges)
-        sed -i "s|!\[Coverage\](coverage.svg)|![Coverage](https://img.shields.io/badge/coverage-${total}%25-${COLOR})|g" README.md
-        sed -i "s|!\[Coverage\](https://img.shields.io/badge/coverage-[^)]*)|![Coverage](https://img.shields.io/badge/coverage-${total}%25-${COLOR})|g" README.md
-
-    - name: Commit changes
-      if: github.ref == 'refs/heads/main'
-      uses: stefanzweifel/git-auto-commit-action@v4
-      with:
-        commit_message: Update coverage badge in README
-        file_pattern: README.md

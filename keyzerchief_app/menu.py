@@ -245,6 +245,8 @@ def menu_modal(
                     if redraw_main_ui:
                         redraw_main_ui()
                     save_changes(stdscr, state)
+                else:
+                    continue
             elif selected_label == "Quit":
                 submenu_win.clear()
                 draw_menu_bar(None, width)

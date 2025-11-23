@@ -138,6 +138,8 @@ class TestMenu(unittest.TestCase):
         menu_modal(self.mock_stdscr, self.state, active_menu=1)
 
         mock_save_changes.assert_not_called()
+        # Verify that we stayed in the menu (consumed all 4 keys: Down, Down, Enter, Escape)
+        self.assertEqual(self.mock_stdscr.getch.call_count, 4)
     @patch('keyzerchief_app.menu.popup_form')
     def test_handle_filter_popup(self, mock_popup_form):
         mock_popup_form.return_value = ({"name": "test"}, self.mock_stdscr)

@@ -32,7 +32,7 @@ from .keystore_actions import (
 from .input_listener import start_modifier_monitor, stop_modifier_monitor
 from .menu import menu_modal
 from .state import AppState
-from .ui.layout import draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
+from .ui.layout import draw_clock, draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
 
 
 def _resolve_function_key_index(key_code: int) -> tuple[int, bool] | None:
@@ -113,6 +113,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel)
             draw_footer(stdscr, state, footer_options)
             draw_menu_bar(None, width)
+            draw_clock(stdscr, width)
 
             key = stdscr.getch()
 
