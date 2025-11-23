@@ -26,7 +26,12 @@ def popup_box(win: "curses.window", title: str) -> None:
     win.erase()
     win.attron(curses.color_pair(COLOR_PAIR_DARKER))
     win.box()
-    win.addstr(0, max(2, (width - len(title)) // 2), f"{title[:width - 4]}", curses.color_pair(COLOR_PAIR_MENU))
+    win.addstr(
+        0,
+        max(2, (width - len(title)) // 2),
+        f"{title[:width - 4]}",
+        curses.color_pair(COLOR_PAIR_MENU),
+    )
     win.addstr(height - 1, label_x, esc_label)
     win.attroff(curses.color_pair(COLOR_PAIR_DARKER))
     win.addstr(height - 1, label_x + 2, "esc", curses.color_pair(COLOR_PAIR_HEADER))
@@ -97,7 +102,9 @@ def file_picker(
 
             try:
                 size = os.path.getsize(entry_path)
-                mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(entry_path)))
+                mtime = time.strftime(
+                    "%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(entry_path))
+                )
             except Exception:
                 size = 0
                 mtime = ""
@@ -113,7 +120,9 @@ def file_picker(
             else:
                 attr = curses.A_NORMAL
 
-            win.addstr(idx + 2, 1, f" {name_str:<35.35} {size_str:>9} {mtime:>20}", attr)
+            win.addstr(
+                idx + 2, 1, f" {name_str:<35.35} {size_str:>9} {mtime:>20}", attr
+            )
 
         key = win.getch()
 
@@ -256,7 +265,9 @@ def popup_form(
                 x = field_start_x + 3
                 show_left = visible_options[0][0] > 0 if visible_options else False
                 show_right = (
-                    visible_options[-1][0] < len(options) - 1 if visible_options else False
+                    visible_options[-1][0] < len(options) - 1
+                    if visible_options
+                    else False
                 )
 
                 for idx, opt in visible_options:
@@ -286,20 +297,30 @@ def popup_form(
                     attr = curses.A_REVERSE | curses.A_DIM
                 else:
                     display_val = val
-                    attr = curses.A_REVERSE if is_selected else curses.color_pair(COLOR_PAIR_FIELD)
+                    attr = (
+                        curses.A_REVERSE
+                        if is_selected
+                        else curses.color_pair(COLOR_PAIR_FIELD)
+                    )
 
                 win.addstr(y, field_start_x - len(label) + 2, label)
                 win.addstr(
                     y,
                     field_start_x + 3,
-                    display_val[: win_width - field_start_x - 5].ljust(win_width - field_start_x - 5),
+                    display_val[: win_width - field_start_x - 5].ljust(
+                        win_width - field_start_x - 5
+                    ),
                     attr,
                 )
 
         btn_y = win_height - 2
         btn_x = (win_width - sum(len(b) for b in buttons) - BUTTON_SPACING) // 2
         for i, btn in enumerate(buttons):
-            attr = curses.A_REVERSE if in_buttons and selected_button == i else curses.color_pair(COLOR_PAIR_FIELD)
+            attr = (
+                curses.A_REVERSE
+                if in_buttons and selected_button == i
+                else curses.color_pair(COLOR_PAIR_FIELD)
+            )
             win.addstr(btn_y, btn_x, btn, attr)
             btn_x += len(btn) + BUTTON_SPACING
 
@@ -308,10 +329,18 @@ def popup_form(
             if current in choice_fields:
                 options = choice_labels[current]
                 selected_index = options.index(values[current])
-                x = field_start_x + 3 + sum(len(opt) + 3 for opt in options[:selected_index])
+                x = (
+                    field_start_x
+                    + 3
+                    + sum(len(opt) + 3 for opt in options[:selected_index])
+                )
                 win.move(y, x + 1)
             else:
-                val = values[current] if current not in masked_fields else "*" * len(values[current])
+                val = (
+                    values[current]
+                    if current not in masked_fields
+                    else "*" * len(values[current])
+                )
                 win.move(y, min(field_start_x + 3 + len(val), win_width - 2))
 
         win.refresh()
@@ -347,7 +376,11 @@ def popup_form(
 
                 if key == curses.KEY_LEFT and idx > 0:
                     new_idx = idx - 1
-                    if visible_range and idx == visible_range[0] and visible_range[0] > 0:
+                    if (
+                        visible_range
+                        and idx == visible_range[0]
+                        and visible_range[0] > 0
+                    ):
                         choice_offsets[current] = visible_range[0] - 1
                     elif new_idx < choice_offsets.get(current, 0):
                         choice_offsets[current] = new_idx
@@ -366,7 +399,12 @@ def popup_form(
             elif 32 <= key <= 126 and len(values[current]) < 60:
                 values[current] += chr(key)
             elif key in [10, 13] and current in file_fields:
-                path = file_picker(stdscr, ".", labels[current], [".key", ".p12", ".cer", ".pem", ".crt", ".jks"])
+                path = file_picker(
+                    stdscr,
+                    ".",
+                    labels[current],
+                    [".key", ".p12", ".cer", ".pem", ".crt", ".jks"],
+                )
                 if path:
                     values[current] = path
         else:
@@ -376,7 +414,11 @@ def popup_form(
                 if selected_button == 0:
                     curses.noecho()
                     return {
-                        labels[i].rstrip(':?#').lower().replace(' ', '_'): values[i].strip()
+                        labels[i]
+                        .rstrip(":?#")
+                        .lower()
+                        .replace(" ", "_"): values[i]
+                        .strip()
                         for i in visible_fields
                     }, win
                 return None, win
@@ -424,7 +466,9 @@ def show_help_popup(stdscr: "curses.window") -> None:
         "General:",
         format_item("Enter", "Activate a highlighted menu option or confirm dialogs"),
         format_item("q / Esc", "Prompt to quit and optionally save changes"),
-        format_item("Menu actions", "Filter, open keystore, toggle mouse, search content, quit"),
+        format_item(
+            "Menu actions", "Filter, open keystore, toggle mouse, search content, quit"
+        ),
     ]
 
     height, width = stdscr.getmaxyx()
@@ -460,11 +504,20 @@ def show_help_popup(stdscr: "curses.window") -> None:
             if line_idx >= len(help_lines):
                 continue
             line = help_lines[line_idx]
-            attr = curses.color_pair(COLOR_PAIR_HEADER) if line.endswith(":") else curses.A_NORMAL
+            attr = (
+                curses.color_pair(COLOR_PAIR_HEADER)
+                if line.endswith(":")
+                else curses.A_NORMAL
+            )
             win.addstr(y, 2, line[: win_width - 4], attr)
 
         instructions = "Use ↑/↓ or PgUp/PgDn to scroll. Enter or Esc to close."
-        win.addstr(win_height - 2, 2, instructions[: win_width - 4], curses.color_pair(COLOR_PAIR_FIELD))
+        win.addstr(
+            win_height - 2,
+            2,
+            instructions[: win_width - 4],
+            curses.color_pair(COLOR_PAIR_FIELD),
+        )
         win.refresh()
 
         key = win.getch()
@@ -494,7 +547,9 @@ def prompt_import_key_type(stdscr: "curses.window") -> Optional[str]:
     height, width = stdscr.getmaxyx()
     win_height = len(key_types) + 4
     win_width = max(len(t) for t in key_types) + 13
-    win = curses.newwin(win_height, win_width, (height - win_height) // 2, (width - win_width) // 2)
+    win = curses.newwin(
+        win_height, win_width, (height - win_height) // 2, (width - win_width) // 2
+    )
     win.keypad(True)
     popup_box(win, "Import Key Pair")
     selected = 0
@@ -511,5 +566,41 @@ def prompt_import_key_type(stdscr: "curses.window") -> Optional[str]:
             selected += 1
         elif key in [10, 13]:
             return key_types[selected]
+        elif key in [27]:
+            return None
+
+
+def popup_selection(
+    stdscr: "curses.window", title: str, options: list[str]
+) -> Optional[str]:
+    """Display a menu to select one option from a list."""
+    height, width = stdscr.getmaxyx()
+    win_height = len(options) + 4
+    win_width = max(len(o) for o in options) + 10
+    win_width = max(win_width, len(title) + 6)
+
+    start_y = (height - win_height) // 2
+    start_x = (width - win_width) // 2
+
+    win = curses.newwin(win_height, win_width, start_y, start_x)
+    win.keypad(True)
+    popup_box(win, title)
+
+    selected = 0
+
+    while True:
+        for i, option in enumerate(options):
+            mode = curses.A_REVERSE if i == selected else curses.A_NORMAL
+            win.addstr(2 + i, 2, option.center(win_width - 4), mode)
+
+        win.refresh()
+        key = win.getch()
+
+        if key == curses.KEY_UP and selected > 0:
+            selected -= 1
+        elif key == curses.KEY_DOWN and selected < len(options) - 1:
+            selected += 1
+        elif key in [10, 13]:
+            return options[selected]
         elif key in [27]:
             return None

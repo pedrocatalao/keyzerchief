@@ -17,7 +17,12 @@ from .constants import (
     SHIFT_FOOTER_OPTIONS,
 )
 from .curses_setup import init_curses
-from .keystore import check_unsaved_changes, find_entry_index_by_alias, get_keystore_entries, save_changes
+from .keystore import (
+    check_unsaved_changes,
+    find_entry_index_by_alias,
+    get_keystore_entries,
+    save_changes,
+)
 from .keystore_actions import (
     change_keystore_password,
     delete_entry,
@@ -28,11 +33,13 @@ from .keystore_actions import (
     import_pkcs8_keypair,
     open_keystore,
     rename_entry_alias,
+    export_entry,
 )
 from .input_listener import start_modifier_monitor, stop_modifier_monitor
 from .menu import menu_modal
 from .state import AppState
 from .ui.layout import draw_clock, draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
+from .ui.popups import prompt_import_key_type, show_help_popup
 
 
 def _resolve_function_key_index(key_code: int) -> tuple[int, bool] | None:
@@ -72,7 +79,6 @@ def _capture_escape_sequence(stdscr: "curses.window") -> tuple[str | None, list[
         sequence = None
 
     return sequence, captured
-from .ui.popups import prompt_import_key_type, show_help_popup
 
 
 def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
@@ -90,7 +96,16 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
     active_panel = LEFT_PANEL
 
     entries = [SimpleNamespace(get=lambda k, default=None: {"Alias name": ""}.get(k, default))]  # type: ignore
-    draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel, True)
+    draw_ui(
+        stdscr,
+        state,
+        entries,
+        selected,
+        scroll_offset,
+        detail_scroll,
+        active_panel,
+        True,
+    )
 
     open_keystore(stdscr, state, keystore_arg)
 
@@ -110,7 +125,15 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 scroll_offset = 0
                 detail_scroll = 0
 
-            draw_ui(stdscr, state, entries, selected, scroll_offset, detail_scroll, active_panel)
+            draw_ui(
+                stdscr,
+                state,
+                entries,
+                selected,
+                scroll_offset,
+                detail_scroll,
+                active_panel,
+            )
             draw_footer(stdscr, state, footer_options)
             draw_menu_bar(None, width)
             draw_clock(stdscr, width)
@@ -234,7 +257,9 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     selected = len(entries) - 1
                     scroll_offset = max(0, len(entries) - panel_height)
                 else:
-                    detail_scroll = max(0, len(entries[selected].get("__rendered__", [])) - 1)
+                    detail_scroll = max(
+                        0, len(entries[selected].get("__rendered__", [])) - 1
+                    )
 
             elif key in (ord("\t"), 9):
                 if active_panel == LEFT_PANEL:
@@ -247,7 +272,9 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             elif fkey_info is not None:
                 key_index, shift_from_code = fkey_info
                 shift_active = shift_from_code or modifier_monitor.is_shift_pressed()
-                footer_options = SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
+                footer_options = (
+                    SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
+                )
 
                 if 0 <= key_index < len(footer_options):
                     highlight_footer_key(stdscr, key_index, footer_options)
@@ -357,6 +384,22 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     )
                     change_keystore_password(stdscr, state)
                     check_unsaved_changes(state)
+
+                elif key_index == 2 and entries:
+                    alias = entries[selected].get("Alias name")
+                    entry_type = entries[selected].get("Entry type", "")
+                    if alias:
+                        draw_ui(
+                            stdscr,
+                            state,
+                            entries,
+                            selected,
+                            scroll_offset,
+                            detail_scroll,
+                            active_panel,
+                            True,
+                        )
+                        export_entry(stdscr, state, alias, entry_type)
 
                 elif key_index == 5 and entries:
                     alias = entries[selected].get("Alias name")
