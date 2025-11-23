@@ -40,7 +40,7 @@ jobs:
       if: github.ref == 'refs/heads/main'
       run: |
         # Determine color
-        COLOR=$(python -c "t=float('$total'); print('green' if t > 90 else 'yellow' if t > 75 else 'red')")
+        COLOR=$(python -c "t=float('$total'); print('green' if t > 80 else 'yellow' if t > 50 else 'red')")
 
         # Update README (handle both old SVG and potential existing shields.io badges)
         sed -i "s|!\[Coverage\](coverage.svg)|![Coverage](https://img.shields.io/badge/coverage-${total}%25-${COLOR})|g" README.md
