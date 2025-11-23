@@ -3,6 +3,11 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 import sys
 import os
+from unittest.mock import patch, MagicMock
+
+# Mock pynput before importing application modules to avoid X server requirement in CI
+sys.modules["pynput"] = MagicMock()
+sys.modules["pynput.keyboard"] = MagicMock()
 
 # Add the project root to sys.path so we can import keyzerchief_app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
