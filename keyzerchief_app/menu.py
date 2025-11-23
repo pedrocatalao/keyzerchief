@@ -6,7 +6,9 @@ import curses
 from typing import Callable, Optional
 
 from .constants import (
+    COLOR_PAIR_DARK,
     COLOR_PAIR_DARKER,
+    COLOR_PAIR_EXPIRED_DIM,
     COLOR_PAIR_HEADER,
     COLOR_PAIR_MENU,
     MENU_ITEMS,
@@ -80,7 +82,7 @@ def menu_modal(
     """Handle navigation within the top menu bar."""
     submenus = {
         "Left": ["Filter"],
-        "File": ["Open keystore", "Quit"],
+        "File": ["Open keystore", "Save", "Quit"],
         "Options": ["Enable/Disable mouse"],
         "Right": ["Search content"],
     }
@@ -100,11 +102,17 @@ def menu_modal(
         submenu_win.box()
 
         for idx, label in enumerate(items):
-            attr = (
-                curses.color_pair(COLOR_PAIR_MENU)
-                if idx == selected_index
-                else curses.color_pair(COLOR_PAIR_HEADER)
-            )
+            if label == "Save" and not state.has_unsaved_changes:
+                if idx == selected_index:
+                    attr = curses.color_pair(COLOR_PAIR_DARK) | curses.A_REVERSE
+                else:
+                    attr = curses.color_pair(COLOR_PAIR_DARK)
+            else:
+                attr = (
+                    curses.color_pair(COLOR_PAIR_MENU)
+                    if idx == selected_index
+                    else curses.color_pair(COLOR_PAIR_HEADER)
+                )
             submenu_win.addstr(1 + idx, 2, label.ljust(max_width - 4), attr)
 
         submenu_win.refresh()
@@ -165,6 +173,8 @@ def menu_modal(
                         handle_filter_popup(stdscr, state)
                     elif selected_label == "Open keystore":
                         open_keystore(stdscr, state, None)
+                    elif selected_label == "Save":
+                        save_changes(stdscr, state)
                     elif selected_label == "Quit":
                         result = save_changes(stdscr, state)
                         if result != "esc":
@@ -228,6 +238,13 @@ def menu_modal(
                 if redraw_main_ui:
                     redraw_main_ui()
                 open_keystore(stdscr, state, None)
+            elif selected_label == "Save":
+                if state.has_unsaved_changes:
+                    submenu_win.clear()
+                    draw_menu_bar(None, width)
+                    if redraw_main_ui:
+                        redraw_main_ui()
+                    save_changes(stdscr, state)
             elif selected_label == "Quit":
                 submenu_win.clear()
                 draw_menu_bar(None, width)
