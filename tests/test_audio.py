@@ -22,7 +22,7 @@ class TestAudio(unittest.TestCase):
         # play_sfx starts a thread, so we need to wait for it or just verify the thread start logic
         # However, since the thread target is an inner function, we can't easily mock it directly without refactoring.
         # But we can verify that Popen is called if we let the thread run (it's daemon).
-        # Actually, unit testing threaded code is tricky. 
+        # Actually, unit testing threaded code is tricky.
         # A better approach for this simple function is to mock threading.Thread to run synchronously or verify it was called.
         
         with patch('keyzerchief_app.audio.threading.Thread') as mock_thread:

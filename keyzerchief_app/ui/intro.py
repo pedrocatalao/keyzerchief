@@ -162,4 +162,3 @@ def prompt_password(win: "curses.window", state: AppState) -> str:
                     keypad_win.addch(0, pos - 1, "★", dim_attr)
                     keypad_win.addch(0, pos, " ", bright_attr)
                     keypad_win.refresh()
-

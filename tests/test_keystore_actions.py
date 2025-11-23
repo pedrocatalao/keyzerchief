@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from keyzerchief_app.state import AppState
 from keyzerchief_app.keystore_actions import (
-    delete_entry, 
+    delete_entry,
     rename_entry_alias,
     import_cert_file,
     generate_key_pair,
