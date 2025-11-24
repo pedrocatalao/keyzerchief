@@ -220,7 +220,9 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
 
                     if 1 < my < height - 2:
                         if 0 < mx < width // 2:
-                            active_panel = LEFT_PANEL
+                            if active_panel != LEFT_PANEL:
+                                active_panel = LEFT_PANEL
+                                play_sfx("swipe-left")
                             # Handle click selection
                             if mouse_event & (
                                 curses.BUTTON1_CLICKED
@@ -232,7 +234,9 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                                     selected = clicked_index
                                     detail_scroll = 0
                         elif mx >= width // 2:
-                            active_panel = RIGHT_PANEL
+                            if active_panel != RIGHT_PANEL:
+                                active_panel = RIGHT_PANEL
+                                play_sfx("swipe-right")
 
                     if mouse_event & 0x80000:
                         if active_panel == LEFT_PANEL and selected > 0:

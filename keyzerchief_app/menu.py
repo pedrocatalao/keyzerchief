@@ -12,7 +12,7 @@ from .constants import (
     COLOR_PAIR_MENU,
     MENU_ITEMS,
 )
-from .state import AppState
+from .state import AppState, default_filter_state
 from .ui.layout import draw_menu_bar, get_menu_item_positions
 from .ui.popups import popup_form
 from .keystore_actions import open_keystore
@@ -80,7 +80,7 @@ def menu_modal(
 ) -> tuple[Optional[int], Optional[int]]:
     """Handle navigation within the top menu bar."""
     submenus = {
-        "Left": ["Filter"],
+        "Left": ["Filter", "Clear filter"],
         "File": ["Open keystore", "Save", "Quit"],
         "Options": ["Enable/Disable mouse"],
         "Right": ["Search content"],
@@ -102,7 +102,13 @@ def menu_modal(
         submenu_win.box()
 
         for idx, label in enumerate(items):
+            is_disabled = False
             if label == "Save" and not state.has_unsaved_changes:
+                is_disabled = True
+            elif label == "Clear filter" and state.filter_state == default_filter_state():
+                is_disabled = True
+
+            if is_disabled:
                 if idx == selected_index:
                     attr = curses.color_pair(COLOR_PAIR_DARK) | curses.A_REVERSE
                 else:
@@ -188,6 +194,10 @@ def menu_modal(
                             handle_toggle_mouse(state)
                         elif selected_label == "Search content":
                             handle_search_content(stdscr, state)
+                        elif selected_label == "Clear filter":
+                            if state.filter_state != default_filter_state():
+                                state.filter_state = default_filter_state()
+                                state.reload_entries = True
                         break
                 else:
                     # Clicked outside submenu (and not on top bar) -> Close
@@ -278,6 +288,16 @@ def menu_modal(
                 if redraw_main_ui:
                     redraw_main_ui()
                 handle_search_content(stdscr, state)
+            elif selected_label == "Clear filter":
+                if state.filter_state != default_filter_state():
+                    state.filter_state = default_filter_state()
+                    state.reload_entries = True
+                    submenu_win.clear()
+                    draw_menu_bar(None, width, state)
+                    if redraw_main_ui:
+                        redraw_main_ui()
+                else:
+                    continue
             return None, None
 
         elif key in [curses.KEY_F9, 27]:
