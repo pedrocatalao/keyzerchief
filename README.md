@@ -89,6 +89,7 @@ python -m keyzerchief_app  # Module invocation
 | Toggle mouse support | `Ctrl+m`
 | Open command menu | `F9` or mouse click on menu bar
 | Export entry | `F3`
+| Change password | `F7`
 | Quit | `F10` or menu option
 
 Contextual menus expose imports, password changes, deletion, saving, and more. Expired certificates glow red so you can spot them at a glance.

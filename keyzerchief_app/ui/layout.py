@@ -1,7 +1,5 @@
 """Drawing helpers for the main UI."""
 
-from __future__ import annotations
-"""Drawing helpers for the main UI."""
 
 import curses
 from types import SimpleNamespace
@@ -40,11 +38,7 @@ def draw_footer(
     for i, item in enumerate(options):
         label = item[2:]
         prefix = item[:2]
-        attr_key = (
-            curses.color_pair(COLOR_PAIR_SELECTED)
-            if "Save" in label and state.has_unsaved_changes
-            else curses.color_pair(COLOR_PAIR_FKEYS)
-        )
+        attr_key = curses.color_pair(COLOR_PAIR_FKEYS)
         stdscr.addstr(height - 1, i * spacing, prefix, attr_key)
         stdscr.addstr(height - 1, i * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
@@ -67,7 +61,7 @@ def highlight_footer_key(
     stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
 
 
-def draw_menu_bar(active_menu: int | None, width: int) -> None:
+def draw_menu_bar(active_menu: int | None, width: int, state: AppState) -> None:
     """Draw the top menu bar."""
     bar_win = curses.newwin(1, width, 0, 0)
     bar_win.bkgd(" ", curses.color_pair(COLOR_PAIR_MENU))
@@ -81,6 +75,12 @@ def draw_menu_bar(active_menu: int | None, width: int) -> None:
         bar_win.addstr(0, x, f" {item} ")
         bar_win.attroff(attr)
         x += len(item) + MENU_SPACING
+
+    if state.has_unsaved_changes:
+        msg = "[Unsaved changes]"
+        center_x = (width - len(msg)) // 2
+        bar_win.addstr(0, center_x, msg, curses.color_pair(COLOR_PAIR_MENU) | curses.A_BLINK)
+
     bar_win.refresh()
 
 

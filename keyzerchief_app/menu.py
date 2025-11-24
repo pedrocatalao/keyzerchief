@@ -73,6 +73,7 @@ def handle_search_content(stdscr: "curses.window", state: AppState) -> None:
 
     state.right_panel_highlight_term = term.lower()
 
+
 def menu_modal(
     stdscr: "curses.window",
     state: AppState,
@@ -118,7 +119,7 @@ def menu_modal(
         submenu_win.refresh()
         return submenu_win
 
-    draw_menu_bar(active_menu, width)
+    draw_menu_bar(active_menu, width, state)
     submenu_win = draw_submenu()
     submenu_bounds = {
         "x": 1 + sum(len(f" {MENU_ITEMS[i]} ") + MENU_SPACING for i in range(active_menu)),
@@ -150,7 +151,7 @@ def menu_modal(
                             selected_index = None
                         if redraw_main_ui:
                             redraw_main_ui()
-                        draw_menu_bar(active_menu, width)
+                        draw_menu_bar(active_menu, width, state)
                         submenu_win = draw_submenu()
                         break
                     x += item_len + MENU_SPACING
@@ -194,7 +195,7 @@ def menu_modal(
             active_menu = (active_menu - 1) % len(MENU_ITEMS)
             if redraw_main_ui:
                 redraw_main_ui()
-            draw_menu_bar(active_menu, width)
+            draw_menu_bar(active_menu, width, state)
             submenu_win = draw_submenu()
 
         elif key == curses.KEY_RIGHT:
@@ -206,7 +207,7 @@ def menu_modal(
             active_menu = (active_menu + 1) % len(MENU_ITEMS)
             if redraw_main_ui:
                 redraw_main_ui()
-            draw_menu_bar(active_menu, width)
+            draw_menu_bar(active_menu, width, state)
             submenu_win = draw_submenu()
 
         elif key == curses.KEY_DOWN:
@@ -228,20 +229,20 @@ def menu_modal(
             selected_label = submenus[MENU_ITEMS[active_menu]][selected_index]
             if selected_label == "Filter":
                 submenu_win.clear()
-                draw_menu_bar(None, width)
+                draw_menu_bar(None, width, state)
                 if redraw_main_ui:
                     redraw_main_ui()
                 handle_filter_popup(stdscr, state)
             elif selected_label == "Open keystore":
                 submenu_win.clear()
-                draw_menu_bar(None, width)
+                draw_menu_bar(None, width, state)
                 if redraw_main_ui:
                     redraw_main_ui()
                 open_keystore(stdscr, state, None)
             elif selected_label == "Save":
                 if state.has_unsaved_changes:
                     submenu_win.clear()
-                    draw_menu_bar(None, width)
+                    draw_menu_bar(None, width, state)
                     if redraw_main_ui:
                         redraw_main_ui()
                     save_changes(stdscr, state)
@@ -249,7 +250,7 @@ def menu_modal(
                     continue
             elif selected_label == "Quit":
                 submenu_win.clear()
-                draw_menu_bar(None, width)
+                draw_menu_bar(None, width, state)
                 if redraw_main_ui:
                     redraw_main_ui()
                 result = save_changes(stdscr, state)
@@ -257,13 +258,13 @@ def menu_modal(
                     raise SystemExit(0)
             elif selected_label == "Enable/Disable mouse":
                 submenu_win.clear()
-                draw_menu_bar(None, width)
+                draw_menu_bar(None, width, state)
                 if redraw_main_ui:
                     redraw_main_ui()
                 handle_toggle_mouse(state)
             elif selected_label == "Search content":
                 submenu_win.clear()
-                draw_menu_bar(None, width)
+                draw_menu_bar(None, width, state)
                 if redraw_main_ui:
                     redraw_main_ui()
                 handle_search_content(stdscr, state)

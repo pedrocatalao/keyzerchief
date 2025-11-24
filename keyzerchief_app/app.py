@@ -24,7 +24,6 @@ from .keystore import (
     save_changes,
 )
 from .keystore_actions import (
-    change_keystore_password,
     delete_entry,
     generate_key_pair,
     import_cert_file,
@@ -34,6 +33,7 @@ from .keystore_actions import (
     open_keystore,
     rename_entry_alias,
     export_entry,
+    change_entry_password,
 )
 from .input_listener import start_modifier_monitor, stop_modifier_monitor
 from .menu import menu_modal
@@ -116,7 +116,17 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
         while True:
             height, width = stdscr.getmaxyx()
             shift_active = modifier_monitor.is_shift_pressed()
-            footer_options = SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
+            
+            # Update footer options dynamically
+            current_footer = list(SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS)
+            if not shift_active and entries:
+                selected_entry = entries[selected]
+                entry_type = selected_entry.get("Entry type", "").lower()
+                if "privatekeyentry" not in entry_type:
+                    # Hide F7 SetPwd if not private key
+                    current_footer[6] = " 7      "
+            
+            footer_options = current_footer
             panel_height = height - 4
             if state.reload_entries:
                 state.reload_entries = False
@@ -135,7 +145,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 active_panel,
             )
             draw_footer(stdscr, state, footer_options)
-            draw_menu_bar(None, width)
+            draw_menu_bar(None, width, state)
             draw_clock(stdscr, width)
 
             key = stdscr.getch()
@@ -272,9 +282,16 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             elif fkey_info is not None:
                 key_index, shift_from_code = fkey_info
                 shift_active = shift_from_code or modifier_monitor.is_shift_pressed()
-                footer_options = (
-                    SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS
-                )
+                
+                # Update footer options dynamically for highlighting
+                current_footer = list(SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS)
+                if not shift_active and entries:
+                    selected_entry = entries[selected]
+                    entry_type = selected_entry.get("Entry type", "").lower()
+                    if "privatekeyentry" not in entry_type:
+                        current_footer[6] = " 7      "
+                
+                footer_options = current_footer
 
                 if 0 <= key_index < len(footer_options):
                     highlight_footer_key(stdscr, key_index, footer_options)
@@ -372,18 +389,8 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     show_help_popup(stdscr)
 
                 elif key_index == 1:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
-                    change_keystore_password(stdscr, state)
-                    check_unsaved_changes(state)
+                    # F2 is now free/empty
+                    pass
 
                 elif key_index == 2 and entries:
                     alias = entries[selected].get("Alias name")
@@ -421,17 +428,22 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                             check_unsaved_changes(state)
 
                 elif key_index == 6:
-                    draw_ui(
-                        stdscr,
-                        state,
-                        entries,
-                        selected,
-                        scroll_offset,
-                        detail_scroll,
-                        active_panel,
-                        True,
-                    )
-                    save_changes(stdscr, state)
+                    if entries:
+                        alias = entries[selected].get("Alias name")
+                        entry_type = entries[selected].get("Entry type", "").lower()
+                        if alias and "privatekeyentry" in entry_type:
+                            draw_ui(
+                                stdscr,
+                                state,
+                                entries,
+                                selected,
+                                scroll_offset,
+                                detail_scroll,
+                                active_panel,
+                                True,
+                            )
+                            change_entry_password(stdscr, state, alias)
+                            check_unsaved_changes(state)
 
                 elif key_index == 7:
                     draw_ui(

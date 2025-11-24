@@ -1002,27 +1002,61 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
     form_data, win = popup_form(
         stdscr,
         title="Export Key Pair",
-        labels=["Format:", "Password:", "Confirm password:", "Export file:"],
+        labels=[
+            "Format:",
+            "Current key password:",
+            "Export password:",
+            "Confirm export password:",
+            "Export file:",
+        ],
         choice_fields=[0],
         choice_labels={0: ("PKCS#12", "PEM")},
-        masked_fields=[1, 2],
-        file_fields=[3],
-        default_values={3: f"{alias}.p12"},
+        masked_fields=[1, 2, 3],
+        file_fields=[4],
+        default_values={4: f"{alias}.p12"},
     )
 
     if not form_data:
         return
 
     fmt = form_data.get("format", "PKCS#12")
-    password = form_data.get("password")
-    confirm = form_data.get("confirm_password")
+    current_key_pass = form_data.get("current_key_password")
+    export_password = form_data.get("export_password")
+    confirm = form_data.get("confirm_export_password")
     export_path = form_data.get("export_file")
 
-    if password != confirm:
-        _show_error(win, "Passwords do not match.")
+    if export_password != confirm:
+        _show_error(win, "Export passwords do not match.")
         return
 
-    if not export_path:
+    if not export_path or not current_key_pass:
+        return
+
+    clear_window(win)
+    win.addstr(2, 2, "Verifying current key password...", curses.A_BOLD)
+    win.refresh()
+
+    # Verify the current key password is correct
+    try:
+        subprocess.run(
+            [
+                "keytool",
+                "-list",
+                "-alias",
+                alias,
+                "-keystore",
+                str(state.keystore_path),
+                "-storepass",
+                state.keystore_password,
+                "-keypass",
+                current_key_pass,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
+        _show_error(win, "Current key password is incorrect.")
         return
 
     clear_window(win)
@@ -1037,6 +1071,8 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
             str(state.keystore_path),
             "-srcstorepass",
             state.keystore_password,
+            "-srckeypass",
+            current_key_pass,
             "-srcalias",
             alias,
             "-destkeystore",
@@ -1044,9 +1080,9 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
             "-deststoretype",
             "PKCS12",
             "-deststorepass",
-            password,
+            export_password,
             "-destkeypass",
-            password,
+            export_password,
         ]
         try:
             subprocess.run(
@@ -1072,6 +1108,8 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
                     str(state.keystore_path),
                     "-srcstorepass",
                     state.keystore_password,
+                    "-srckeypass",
+                    current_key_pass,
                     "-srcalias",
                     alias,
                     "-destkeystore",
@@ -1079,9 +1117,9 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
                     "-deststoretype",
                     "PKCS12",
                     "-deststorepass",
-                    password,
+                    export_password,
                     "-destkeypass",
-                    password,
+                    export_password,
                 ],
                 check=True,
                 stdout=subprocess.PIPE,
@@ -1097,9 +1135,9 @@ def _export_key_pair_flow(stdscr: "curses.window", state: AppState, alias: str) 
                 "-out",
                 export_path,
                 "-passin",
-                f"pass:{password}",
+                f"pass:{export_password}",
                 "-passout",
-                f"pass:{password}",
+                f"pass:{export_password}",
             ]
             subprocess.run(
                 cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -1144,3 +1182,88 @@ def export_entry(
             _export_certificate_chain_flow(stdscr, state, alias)
         elif choice == "Public Key":
             _export_public_key_flow(stdscr, state, alias)
+
+
+def change_entry_password(stdscr: "curses.window", state: AppState, alias: str) -> None:
+    """Change the password for a specific private key entry."""
+    form_data, win = popup_form(
+        stdscr,
+        title=f"Change Password for {alias}",
+        labels=["Current password:", "New password:", "Confirm new:"],
+        masked_fields=[0, 1, 2],
+    )
+
+    if not form_data:
+        return
+
+    current_pass = form_data.get("current_password")
+    new_pass = form_data.get("new_password")
+    confirm_pass = form_data.get("confirm_new")
+
+    if not current_pass or not new_pass:
+        return
+
+    if new_pass != confirm_pass:
+        _show_error(win, "New passwords do not match.")
+        return
+
+    clear_window(win)
+    win.addstr(2, 2, "Verifying current password...", curses.A_BOLD)
+    win.refresh()
+
+    # First, verify the current password is correct by attempting to list the key
+    try:
+        subprocess.run(
+            [
+                "keytool",
+                "-list",
+                "-alias",
+                alias,
+                "-keystore",
+                str(state.keystore_path),
+                "-storepass",
+                state.keystore_password,
+                "-keypass",
+                current_pass,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError:
+        _show_error(win, "Current password is incorrect.")
+        return
+
+    clear_window(win)
+    win.addstr(2, 2, "Changing entry password...", curses.A_BOLD)
+    win.refresh()
+
+    try:
+        subprocess.run(
+            [
+                "keytool",
+                "-keypasswd",
+                "-alias",
+                alias,
+                "-keystore",
+                str(state.keystore_path),
+                "-storepass",
+                state.keystore_password,
+                "-keypass",
+                current_pass,
+                "-new",
+                new_pass,
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        state.has_unsaved_changes = True
+        win.addstr(3, 2, "Entry password changed successfully.", curses.A_BOLD)
+    except subprocess.CalledProcessError as e:
+        _show_error(win, f"Failed to change password: {e}")
+        return
+
+    win.addstr(win.getmaxyx()[0] - 3, 2, "Press any key to continue.")
+    win.refresh()
+    win.getch()

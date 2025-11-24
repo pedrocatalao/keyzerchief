@@ -38,12 +38,12 @@ MENU_SPACING = 3
 MENU_ITEMS = ["Left", "File", "Options", "Right"]
 FOOTER_OPTIONS = [
     " 1Help",
-    " 2SetPwd",
+    " 2Actions",
     " 3Export",
     " 4Verify",
     " 5Copy",
     " 6Rename",
-    " 7Save",
+    " 7SetPwd",
     " 8Delete",
     " 9PullDn",
     "10Quit",
