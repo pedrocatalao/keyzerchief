@@ -56,7 +56,7 @@ Everything is written with the Python standard library and relies on `curses` fo
    git clone https://github.com/pedrocatalao/keyzerchief.git
    cd keyzerchief
    ```
-2. (Recommended) Create and activate a virtual environment:
+2. (Recommended) Create and activate a virtual environment - don't worry first execution of `./keyzerchief` will do it for you:
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
