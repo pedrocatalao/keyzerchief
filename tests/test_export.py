@@ -83,8 +83,9 @@ class TestExport(unittest.TestCase):
         mock_form.return_value = (
             {
                 "format": "PKCS#12",
-                "password": "newpass",
-                "confirm_password": "newpass",
+                "current_key_password": "keypass",
+                "export_password": "newpass",
+                "confirm_export_password": "newpass",
                 "export_file": "out.p12",
             },
             mock_win,
@@ -100,7 +101,12 @@ class TestExport(unittest.TestCase):
             ["Key Pair", "Certificate Chain", "Public Key"],
         )
 
-        # Check keytool command
+        # Check keytool commands
+        # First call should be verification (-list)
+        # Second call should be export (-importkeystore)
+        self.assertTrue(mock_run.call_count >= 2)
+
+        # Verify the export command (last call)
         args, _ = mock_run.call_args
         cmd = args[0]
         self.assertEqual(cmd[0], "keytool")
