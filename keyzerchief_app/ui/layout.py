@@ -8,11 +8,9 @@ from ..constants import (
     COLOR_PAIR_CYAN,
     COLOR_PAIR_CYAN_DIM,
     COLOR_PAIR_DARK,
-    COLOR_PAIR_DARKER,
     COLOR_PAIR_EXPIRED,
     COLOR_PAIR_EXPIRED_DIM,
     COLOR_PAIR_FKEYS,
-    COLOR_PAIR_FIELD,
     COLOR_PAIR_HEADER,
     COLOR_PAIR_HIGHLIGHT_DIM,
     COLOR_PAIR_MENU,
@@ -59,6 +57,25 @@ def highlight_footer_key(
     stdscr.refresh()
     curses.napms(200)
     stdscr.addstr(height - 1, key_index * spacing + 2, label.ljust(spacing - 2), curses.color_pair(COLOR_PAIR_HEADER))
+
+
+def get_menu_item_positions() -> list[tuple[int, int]]:
+    """Calculate the start and end x positions for each menu item.
+
+    Returns:
+        List of (start_x, end_x) tuples for each menu item.
+    """
+    positions = []
+    x = 1
+    for item in MENU_ITEMS:
+        item_with_padding = f" {item} "
+        start_x = x
+        end_x = x + len(item_with_padding)
+        positions.append((start_x, end_x))
+        # Must match draw_menu_bar logic exactly:
+        # x += len(item) + MENU_SPACING
+        x += len(item) + MENU_SPACING
+    return positions
 
 
 def draw_menu_bar(active_menu: int | None, width: int, state: AppState) -> None:

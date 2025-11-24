@@ -11,16 +11,14 @@ from .audio import play_sfx
 from .constants import (
     FOOTER_OPTIONS,
     LEFT_PANEL,
-    MENU_ITEMS,
-    MENU_SPACING,
     RIGHT_PANEL,
     SHIFT_FOOTER_OPTIONS,
 )
 from .curses_setup import init_curses
 from .keystore import (
-    check_unsaved_changes,
     find_entry_index_by_alias,
     get_keystore_entries,
+    check_unsaved_changes,
     save_changes,
 )
 from .keystore_actions import (
@@ -38,7 +36,7 @@ from .keystore_actions import (
 from .input_listener import start_modifier_monitor, stop_modifier_monitor
 from .menu import menu_modal
 from .state import AppState
-from .ui.layout import draw_clock, draw_footer, draw_menu_bar, draw_ui, highlight_footer_key
+from .ui.layout import draw_clock, draw_footer, draw_menu_bar, draw_ui, highlight_footer_key, get_menu_item_positions
 from .ui.popups import prompt_import_key_type, show_help_popup
 
 
@@ -181,10 +179,10 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     _, mx, my, _, mouse_event = curses.getmouse()
 
                     if my == 0:
-                        x = 1
-                        for i, item in enumerate(MENU_ITEMS):
-                            item_len = len(f" {item} ")
-                            if x <= mx < x + item_len:
+                        # Get accurate menu item positions
+                        menu_positions = get_menu_item_positions()
+                        for i, (start_x, end_x) in enumerate(menu_positions):
+                            if start_x <= mx < end_x:
                                 active_menu = i
                                 draw_ui(
                                     stdscr,
@@ -212,7 +210,6 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                                     ),
                                 )
                                 break
-                            x += item_len + MENU_SPACING
 
                     if my == 1 and width // 2 - 6 <= mx < width // 2:
                         selected = 0
@@ -295,7 +292,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
             elif fkey_info is not None:
                 key_index, shift_from_code = fkey_info
                 shift_active = shift_from_code or modifier_monitor.is_shift_pressed()
-                
+
                 # Update footer options dynamically for highlighting
                 current_footer = list(SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS)
                 if not shift_active and entries:
@@ -303,7 +300,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     entry_type = selected_entry.get("Entry type", "").lower()
                     if "privatekeyentry" not in entry_type:
                         current_footer[6] = " 7      "
-                
+
                 footer_options = current_footer
 
                 if 0 <= key_index < len(footer_options):

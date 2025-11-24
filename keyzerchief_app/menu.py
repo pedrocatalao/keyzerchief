@@ -8,14 +8,12 @@ from typing import Callable, Optional
 from .constants import (
     COLOR_PAIR_DARK,
     COLOR_PAIR_DARKER,
-    COLOR_PAIR_EXPIRED_DIM,
     COLOR_PAIR_HEADER,
     COLOR_PAIR_MENU,
     MENU_ITEMS,
-    MENU_SPACING,
 )
 from .state import AppState
-from .ui.layout import draw_menu_bar
+from .ui.layout import draw_menu_bar, get_menu_item_positions
 from .ui.popups import popup_form
 from .keystore_actions import open_keystore
 from .keystore import save_changes
@@ -95,7 +93,8 @@ def menu_modal(
         items = submenus[MENU_ITEMS[active_menu]]
         max_width = max(len(item) for item in items) + 4
         box_height = len(items) + 2
-        start_x = 1 + sum(len(f" {MENU_ITEMS[i]} ") + MENU_SPACING for i in range(active_menu))
+        menu_positions = get_menu_item_positions()
+        start_x = menu_positions[active_menu][0]
         start_y = 1
 
         submenu_win = curses.newwin(box_height, max_width, start_y, start_x)
@@ -121,8 +120,9 @@ def menu_modal(
 
     draw_menu_bar(active_menu, width, state)
     submenu_win = draw_submenu()
+    menu_positions = get_menu_item_positions()
     submenu_bounds = {
-        "x": 1 + sum(len(f" {MENU_ITEMS[i]} ") + MENU_SPACING for i in range(active_menu)),
+        "x": menu_positions[active_menu][0],
         "y": 1,
         "width": max(len(item) for item in submenus[MENU_ITEMS[active_menu]]) + 4,
         "height": len(submenus[MENU_ITEMS[active_menu]]) + 2,
@@ -134,10 +134,10 @@ def menu_modal(
         if key == curses.KEY_MOUSE:
             _, mx, my, _, mouse_event = curses.getmouse()
             if my == 0:
-                x = 1
-                for i, item in enumerate(MENU_ITEMS):
-                    item_len = len(f" {item} ")
-                    if x <= mx < x + item_len:
+                # Get accurate menu item positions
+                menu_positions = get_menu_item_positions()
+                for i, (start_x, end_x) in enumerate(menu_positions):
+                    if start_x <= mx < end_x:
                         if active_menu == i:
                             if submenu_win:
                                 submenu_win.clear()
@@ -154,7 +154,6 @@ def menu_modal(
                         draw_menu_bar(active_menu, width, state)
                         submenu_win = draw_submenu()
                         break
-                    x += item_len + MENU_SPACING
 
             elif submenu_win and submenu_bounds:
                 if (
