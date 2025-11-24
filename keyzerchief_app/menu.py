@@ -156,34 +156,45 @@ def menu_modal(
                         break
 
             elif submenu_win and submenu_bounds:
-                if (
-                    submenu_bounds["y"] < my < submenu_bounds["y"] + submenu_bounds["height"] - 1
-                    and submenu_bounds["x"] <= mx < submenu_bounds["x"] + submenu_bounds["width"]
-                ):
-                    selected_index = my - submenu_bounds["y"] - 1
-                    submenu_win = draw_submenu()
-                    curses.napms(35)
-                    items = submenus[MENU_ITEMS[active_menu]]
-                    selected_label = items[selected_index]
-                    submenu_win.clear()
-                    submenu_win.refresh()
-                    if redraw_main_ui:
-                        redraw_main_ui()
-                    if selected_label == "Filter":
-                        handle_filter_popup(stdscr, state)
-                    elif selected_label == "Open keystore":
-                        open_keystore(stdscr, state, None)
-                    elif selected_label == "Save":
-                        save_changes(stdscr, state)
-                    elif selected_label == "Quit":
-                        result = save_changes(stdscr, state)
-                        if result != "esc":
-                            raise SystemExit(0)
-                    elif selected_label == "Enable/Disable mouse":
-                        handle_toggle_mouse(state)
-                    elif selected_label == "Search content":
-                        handle_search_content(stdscr, state)
-                    break
+                # Check if click is inside the submenu window (including borders)
+                is_inside_submenu = (
+                    submenu_bounds["x"] <= mx < submenu_bounds["x"] + submenu_bounds["width"]
+                    and submenu_bounds["y"] <= my < submenu_bounds["y"] + submenu_bounds["height"]
+                )
+
+                if is_inside_submenu:
+                    # Check if on a specific item (excluding top/bottom borders)
+                    if submenu_bounds["y"] < my < submenu_bounds["y"] + submenu_bounds["height"] - 1:
+                        selected_index = my - submenu_bounds["y"] - 1
+                        submenu_win = draw_submenu()
+                        curses.napms(35)
+                        items = submenus[MENU_ITEMS[active_menu]]
+                        selected_label = items[selected_index]
+                        submenu_win.clear()
+                        submenu_win.refresh()
+                        if redraw_main_ui:
+                            redraw_main_ui()
+                        if selected_label == "Filter":
+                            handle_filter_popup(stdscr, state)
+                        elif selected_label == "Open keystore":
+                            open_keystore(stdscr, state, None)
+                        elif selected_label == "Save":
+                            save_changes(stdscr, state)
+                        elif selected_label == "Quit":
+                            result = save_changes(stdscr, state)
+                            if result != "esc":
+                                raise SystemExit(0)
+                        elif selected_label == "Enable/Disable mouse":
+                            handle_toggle_mouse(state)
+                        elif selected_label == "Search content":
+                            handle_search_content(stdscr, state)
+                        break
+                else:
+                    # Clicked outside submenu (and not on top bar) -> Close
+                    if submenu_win:
+                        submenu_win.clear()
+                        submenu_win.refresh()
+                    return None, None
 
         elif key == curses.KEY_LEFT:
             if submenu_win:
