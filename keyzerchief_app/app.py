@@ -221,6 +221,16 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     if 1 < my < height - 2:
                         if 0 < mx < width // 2:
                             active_panel = LEFT_PANEL
+                            # Handle click selection
+                            if mouse_event & (
+                                curses.BUTTON1_CLICKED
+                                | curses.BUTTON1_PRESSED
+                                | curses.BUTTON1_RELEASED
+                            ):
+                                clicked_index = my - 2 + scroll_offset
+                                if 0 <= clicked_index < len(entries):
+                                    selected = clicked_index
+                                    detail_scroll = 0
                         elif mx >= width // 2:
                             active_panel = RIGHT_PANEL
 
