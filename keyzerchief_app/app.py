@@ -111,12 +111,25 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
 
     entries = get_keystore_entries(state)
     modifier_monitor = start_modifier_monitor()
+    previous_shift_state = False
 
     try:
         while True:
             height, width = stdscr.getmaxyx()
             shift_active = modifier_monitor.is_shift_pressed()
-            
+
+            # Toggle mouse support based on shift key state
+            if shift_active != previous_shift_state:
+                if shift_active:
+                    # Shift pressed - disable mouse
+                    curses.mousemask(0)
+                    state.mouse_enabled = False
+                else:
+                    # Shift released - enable mouse
+                    curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+                    state.mouse_enabled = True
+                previous_shift_state = shift_active
+
             # Update footer options dynamically
             current_footer = list(SHIFT_FOOTER_OPTIONS if shift_active else FOOTER_OPTIONS)
             if not shift_active and entries:
@@ -125,7 +138,7 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                 if "privatekeyentry" not in entry_type:
                     # Hide F7 SetPwd if not private key
                     current_footer[6] = " 7      "
-            
+
             footer_options = current_footer
             panel_height = height - 4
             if state.reload_entries:
