@@ -96,7 +96,7 @@ def draw_menu_bar(active_menu: int | None, width: int, state: AppState) -> None:
     if state.has_unsaved_changes:
         msg = "[Unsaved changes]"
         center_x = (width - len(msg)) // 2
-        bar_win.addstr(0, center_x, msg, curses.color_pair(COLOR_PAIR_MENU) | curses.A_BLINK)
+        bar_win.addstr(0, center_x, msg, curses.color_pair(COLOR_PAIR_SELECTED_DIM))
 
     bar_win.refresh()
 

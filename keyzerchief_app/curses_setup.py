@@ -34,7 +34,7 @@ def init_curses() -> None:
     curses.use_default_colors()
     curses.init_color(COLOR_EXPIRED_RED, 750, 200, 200)
     curses.init_color(COLOR_EXPIRED_RED_DIM, 600, 150, 150)
-    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, curses.COLOR_CYAN)
+    curses.init_pair(COLOR_PAIR_SELECTED, curses.COLOR_BLACK, 80)
     curses.init_pair(COLOR_PAIR_SELECTED_DIM, curses.COLOR_BLACK, 73)
     curses.init_pair(COLOR_PAIR_SELECTED_DIM_MORE, curses.COLOR_BLACK, 23)
     curses.init_pair(COLOR_PAIR_HEADER, curses.COLOR_YELLOW, -1)

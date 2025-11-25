@@ -171,5 +171,30 @@ class TestMenu(unittest.TestCase):
 
         self.assertEqual(self.state.right_panel_highlight_term, "searchterm")
 
+    @patch('keyzerchief_app.menu.save_changes')
+    @patch('keyzerchief_app.menu.curses.newwin')
+    @patch('keyzerchief_app.menu.draw_menu_bar')
+    @patch('keyzerchief_app.menu.curses.color_pair')
+    def test_menu_up_initial(self, mock_color_pair, mock_draw_menu_bar, mock_newwin, mock_save_changes):
+        """Test pressing UP immediately after opening menu (regression test for crash)."""
+        mock_color_pair.return_value = 0
+        mock_submenu = MagicMock()
+        mock_newwin.return_value = mock_submenu
+        mock_save_changes.return_value = "esc"  # Prevent SystemExit
+
+        # Sequence: UP (should select last item "Quit"), Enter
+        self.mock_stdscr.getch.side_effect = [
+            curses.KEY_UP,
+            10
+        ]
+
+        # Use "File" menu (["Open keystore", "Save", "Quit"])
+        menu_modal(self.mock_stdscr, self.state, active_menu=1)
+
+        # Verify that we didn't crash and processed the keys
+        self.assertEqual(self.mock_stdscr.getch.call_count, 2)
+        # Verify save_changes was called (confirming "Quit" was selected)
+        mock_save_changes.assert_called_once()
+
 if __name__ == '__main__':
     unittest.main()

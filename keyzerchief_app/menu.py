@@ -238,11 +238,10 @@ def menu_modal(
             submenu_win = draw_submenu()
 
         elif key == curses.KEY_UP and submenu_win:
-            selected_index = (selected_index - 1) % len(submenus[MENU_ITEMS[active_menu]])
-            submenu_win = draw_submenu()
-
-        elif key == curses.KEY_DOWN and submenu_win:
-            selected_index = (selected_index + 1) % len(submenus[MENU_ITEMS[active_menu]])
+            if selected_index is None:
+                selected_index = len(submenus[MENU_ITEMS[active_menu]]) - 1
+            else:
+                selected_index = (selected_index - 1) % len(submenus[MENU_ITEMS[active_menu]])
             submenu_win = draw_submenu()
 
         elif key in [10, 13] and selected_index is not None:
