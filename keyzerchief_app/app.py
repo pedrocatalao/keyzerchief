@@ -516,11 +516,6 @@ def run_app(stdscr: "curses.window", argv: Sequence[str]) -> None:
                     if result is None:
                         break
 
-            elif key in [ord("q"), ord("Q"), 27]:
-                ret = save_changes(stdscr, state)
-                if ret is None:
-                    break
-
             if state.has_unsaved_changes and selected == len(entries) - 1:
                 scroll_offset = max(0, len(entries) - panel_height)
     finally:
